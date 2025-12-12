@@ -7,6 +7,7 @@ import { useRef, useState, useEffect } from 'react';
 import { gsap } from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
 import { supabase } from '../supabase';
+import { toast } from 'sonner';
 
 gsap.registerPlugin(ScrollTrigger);
 import CongustedPricing from '../components/mvpblocks/congusted-pricing';
@@ -193,6 +194,49 @@ const ShopPage = ({ navigateOnly, user, sortPreference }) => {
         }
     };
 
+    const handlePlanSelect = async (plan) => {
+        if (!user) {
+            toast.error("Please log in to upgrade your role.");
+            return;
+        }
+
+        if (activeTab === 'buy_roles') {
+            let role = 'freebiee';
+            let credits = 0;
+
+            if (plan.name === 'Common') {
+                role = 'common';
+                credits = 20;
+            } else if (plan.name === 'Wealthy') {
+                role = 'wealthy';
+                credits = 50;
+            } else if (plan.name === 'Administrator') {
+                role = 'administrator';
+                credits = 100;
+            }
+
+            const loadingToast = toast.loading(`Upgrading to ${plan.name}...`);
+
+            try {
+                const { error } = await supabase
+                    .from('user_details')
+                    .update({ role: role, credits: credits })
+                    .eq('id', user.id);
+
+                if (error) throw error;
+
+                toast.dismiss(loadingToast);
+                toast.success(`Successfully upgraded to ${plan.name}!`);
+            } catch (error) {
+                console.error('Error upgrading role:', error);
+                toast.dismiss(loadingToast);
+                toast.error("Failed to upgrade role. Please try again.");
+            }
+        } else {
+            toast.info("Credit purchase coming soon!");
+        }
+    };
+
     const [activeTab, setActiveTab] = useState('buy_roles');
 
     const shopTabs = [
@@ -208,7 +252,7 @@ const ShopPage = ({ navigateOnly, user, sortPreference }) => {
             period: "per month",
             features: [
                 "Role Badge: Common",
-                "150 Monthly Credits",
+                "20 Monthly Credits",
                 "Basic Support",
                 "Access to Standard Tools"
             ],
@@ -224,7 +268,7 @@ const ShopPage = ({ navigateOnly, user, sortPreference }) => {
             period: "per month",
             features: [
                 "Role Badge: Wealthy",
-                "500 Monthly Credits",
+                "50 Monthly Credits",
                 "Priority Support",
                 "Access to Premium Tools",
                 "Early Access to New Features"
@@ -241,7 +285,7 @@ const ShopPage = ({ navigateOnly, user, sortPreference }) => {
             period: "per month",
             features: [
                 "Role Badge: Administrator",
-                "1000 Monthly Credits",
+                "100 Monthly Credits",
                 "Dedicated Support",
                 "All Tools Unlocked",
                 "Admin Dashboard Access"
@@ -343,34 +387,34 @@ const ShopPage = ({ navigateOnly, user, sortPreference }) => {
 
 
             <div className="content-overlay content-area pt-24">
-                {(user?.user_metadata?.role || 'freebiee') === 'freebiee' && (
-                    <div className="mb-20">
-                        <div className="flex justify-center mb-8">
-                            <MagneticMorphingNav
-                                tabs={shopTabs}
-                                activeTab={activeTab}
-                                onTabChange={setActiveTab}
-                            />
-                        </div>
-
-                        {activeTab === 'buy_roles' && (
-                            <CongustedPricing
-                                title="Upgrade Your Role"
-                                description="Unlock more monthly credits and exclusive features."
-                                plans={rolePlans}
-                            />
-                        )}
-
-                        {activeTab === 'buy_credits' && (
-                            <CongustedPricing
-                                title="Top Up Credits"
-                                description="Need more power? Buy credits that never expire."
-                                plans={creditPlans}
-                                showToggle={false}
-                            />
-                        )}
+                <div className="mb-20">
+                    <div className="flex justify-center mb-8">
+                        <MagneticMorphingNav
+                            tabs={shopTabs}
+                            activeTab={activeTab}
+                            onTabChange={setActiveTab}
+                        />
                     </div>
-                )}
+
+                    {activeTab === 'buy_roles' && (
+                        <CongustedPricing
+                            title="Upgrade Your Role"
+                            description="Unlock more monthly credits and exclusive features."
+                            plans={rolePlans}
+                            onPlanSelect={handlePlanSelect}
+                        />
+                    )}
+
+                    {activeTab === 'buy_credits' && (
+                        <CongustedPricing
+                            title="Top Up Credits"
+                            description="Need more power? Buy credits that never expire."
+                            plans={creditPlans}
+                            showToggle={false}
+                            onPlanSelect={handlePlanSelect}
+                        />
+                    )}
+                </div>
 
                 <div
                     ref={gridRef}

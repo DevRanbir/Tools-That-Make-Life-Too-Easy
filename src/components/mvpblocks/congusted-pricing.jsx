@@ -76,7 +76,8 @@ export default function CongustedPricing({
   plans = defaultPlans,
   title = "Simple, transparent pricing for all.",
   description = "Choose the plan that works for you\nAll plans include access to our platform, lead generation tools, and dedicated support.",
-  showToggle = true
+  showToggle = true,
+  onPlanSelect
 }) {
   const [isMonthly, setIsMonthly] = useState(true);
   const isDesktop = useMediaQuery("(min-width: 768px)");
@@ -226,21 +227,20 @@ export default function CongustedPricing({
 
               <hr className="my-4 w-full border-border" />
 
-              <Link
-                prefetch={false}
-                href={plan.href}
+              <button
+                onClick={() => onPlanSelect && onPlanSelect(plan)}
                 className={cn(
                   buttonVariants({
                     variant: "outline",
                   }),
-                  "group relative w-full gap-2 overflow-hidden text-lg font-semibold tracking-tighter border-0",
+                  "group relative w-full gap-2 overflow-hidden text-lg font-semibold tracking-tighter border-0 cursor-pointer",
                   "transform-gpu ring-offset-current transition-all duration-300 ease-out hover:ring-2 hover:ring-offset-1",
                   plan.isPopular
                     ? "!bg-primary !text-white hover:!bg-primary/90"
                     : "!bg-black !text-white hover:!bg-gray-800 dark:!bg-white dark:!text-black dark:hover:!bg-gray-200",
                 )}>
                 {plan.buttonText}
-              </Link>
+              </button>
               <p className="text-muted-foreground mt-6 text-xs leading-5">
                 {plan.description}
               </p>

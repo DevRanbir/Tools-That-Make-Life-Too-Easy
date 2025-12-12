@@ -15,6 +15,7 @@ import TagsPage from './pages/Tags';
 // import ForYou from './pages/ForYou'; // Reusing Trending for now as requested "same as 2nd"
 
 import { supabase } from './supabase';
+import { Toaster } from 'sonner';
 
 const App = () => {
   const [darkMode, setDarkMode] = useState(true);
@@ -78,18 +79,79 @@ const App = () => {
     }
   }, [activePage]);
 
-  // Check auth state
+  // Check auth state and fetch user details
   useEffect(() => {
-    // getUser validates against the server, ensuring deleted accounts are caught
+    let subscription = null; // Store subscription reference
+
+    const fetchUserDetails = async (currentUser) => {
+      if (!currentUser) {
+        setUser(null);
+        return;
+      }
+
+      const { data: details, error } = await supabase
+        .from('user_details')
+        .select('role, credits')
+        .eq('id', currentUser.id)
+        .single();
+
+      if (error && error.code !== 'PGRST116') { // Ignore "no rows" error for new users initially
+        console.error("Error fetching user details:", error);
+      }
+
+      const role = details?.role || 'freebiee';
+      const credits = details?.credits ?? 0; // Default to 0 if null
+
+      // Merge details into user metadata for easy access in components
+      setUser({
+        ...currentUser,
+        user_metadata: {
+          ...currentUser.user_metadata,
+          role: role,
+          credits: credits
+        }
+      });
+    };
+
+    // Initial load
     supabase.auth.getUser().then(({ data: { user } }) => {
-      setUser(user ?? null);
+      fetchUserDetails(user);
     });
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user ?? null);
+    const { data: { subscription: authListener } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session?.user) {
+        fetchUserDetails(session.user);
+      } else {
+        setUser(null);
+      }
     });
 
-    return () => subscription.unsubscribe();
+    // Real-time subscription for user_details updates
+    const userDetailsSubscription = supabase
+      .channel('public:user_details')
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'user_details' }, (payload) => {
+        // Only update if the changed record belongs to the current user
+        setUser(prevUser => {
+          if (prevUser && payload.new.id === prevUser.id) {
+            return {
+              ...prevUser,
+              user_metadata: {
+                ...prevUser.user_metadata,
+                role: payload.new.role,
+                credits: payload.new.credits
+              }
+            };
+          }
+          return prevUser;
+        });
+      })
+      .subscribe();
+
+
+    return () => {
+      authListener.unsubscribe();
+      supabase.removeChannel(userDetailsSubscription);
+    };
   }, []);
 
   // Force onboarding if user exists but has no username
@@ -191,6 +253,7 @@ const App = () => {
         mode={authMode}
         user={user}
       />
+      <Toaster />
     </div>
   );
 };
