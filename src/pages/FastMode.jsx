@@ -1,0 +1,128 @@
+import React, { useState, useRef, useEffect } from 'react';
+import { Sparkles, Paperclip, ArrowUp, ChevronDown } from 'lucide-react';
+import MagneticMorphingNav from '../components/MagneticMorphingNav';
+
+const FastMode = ({ navigateOnly, user, messages, setMessages }) => {
+    // messages state is now lifted to App.jsx
+
+    const [inputValue, setInputValue] = useState("");
+    const messagesEndRef = useRef(null);
+
+    const scrollToBottom = () => {
+        if (messages.length > 2) {
+            messagesEndRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+        }
+    };
+
+    useEffect(() => {
+        scrollToBottom();
+    }, [messages]);
+
+    const handleSend = () => {
+        if (!inputValue.trim()) return;
+
+        const userMsg = { id: Date.now(), role: 'user', content: inputValue };
+        setMessages(prev => [...prev, userMsg]);
+        setInputValue("");
+
+        setTimeout(() => {
+            const aiMsg = {
+                id: Date.now() + 1,
+                role: 'ai',
+                content: "I'm a demo AI response. I can't actually process requests yet, but I look good doing it!"
+            };
+            setMessages(prev => [...prev, aiMsg]);
+        }, 1000);
+    };
+
+    return (
+        <div className="feed-page min-h-screen bg-background relative pb-40">
+            <div className="content-overlay content-area pt-24 max-w-2xl mx-auto px-4">
+                <div className="sticky-nav-container mb-8">
+                    <MagneticMorphingNav
+                        activeTab="fastmode"
+                        onTabChange={(id) => navigateOnly(id)}
+                        user={user}
+                    />
+                </div>
+
+                <div className="chat-container space-y-6">
+                    {messages.map((msg) => (
+                        <div key={msg.id} className={`flex items-start gap-4 ${msg.role === 'user' ? 'flex-row-reverse' : ''}`}>
+                            {msg.role === 'ai' && (
+                                <div className="w-8 h-8 rounded-full bg-card border border-border flex items-center justify-center shrink-0 shadow-sm">
+                                    <Sparkles size={14} className="text-yellow-400" />
+                                </div>
+                            )}
+                            {msg.role === 'user' && user?.user_metadata?.avatar_url && (
+                                <img src={user.user_metadata.avatar_url} alt="User" className="w-8 h-8 rounded-full object-cover shrink-0" />
+                            )}
+                            {msg.role === 'user' && !user?.user_metadata?.avatar_url && (
+                                <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center text-xs font-bold text-primary shrink-0">
+                                    {user ? user.email[0].toUpperCase() : 'U'}
+                                </div>
+                            )}
+
+                            <div className={`flex flex-col max-w-[80%] ${msg.role === 'user' ? 'items-end' : 'items-start'}`}>
+                                <div className={`relative px-5 py-3 text-sm leading-relaxed ${msg.role === 'user'
+                                    ? 'bg-secondary text-secondary-foreground rounded-2xl rounded-tr-sm'
+                                    : 'text-muted-foreground'
+                                    }`}>
+                                    {msg.content}
+                                </div>
+                            </div>
+                        </div>
+                    ))}
+                    <div ref={messagesEndRef} />
+                </div>
+            </div>
+
+            <div className="fixed bottom-6 left-1/2 -translate-x-1/2 w-[90%] max-w-2xl z-50">
+                <div className="relative rounded-3xl bg-card border border-border p-4 shadow-2xl">
+                    {/* Top Badge */}
+                    {/* <div className="flex justify-between items-center mb-4 px-2">
+                        <div className="flex items-center gap-2">
+                            <span className="font-bold text-white flex items-center gap-1">AI <Sparkles size={12} className="text-yellow-400" /></span>
+                            <span className="text-zinc-400 text-sm">is free this weekend!</span>
+                        </div>
+                        <span className="text-zinc-500 text-xs font-medium cursor-pointer hover:text-white transition-colors">Ship Now!</span>
+                    </div> */}
+
+                    {/* Input */}
+                    <input
+                        type="text"
+                        placeholder="What can I do for you?"
+                        className="w-full bg-transparent text-xl text-foreground placeholder:text-muted-foreground outline-none pb-8 px-2"
+                        value={inputValue}
+                        onChange={(e) => setInputValue(e.target.value)}
+                        onKeyDown={(e) => e.key === 'Enter' && handleSend()}
+                    />
+
+                    {/* Bottom Controls */}
+                    <div className="flex items-center justify-between px-2">
+                        <button className="flex items-center gap-2 bg-secondary hover:bg-muted transition-colors rounded-full px-3 py-1.5 text-sm text-secondary-foreground border border-border">
+                            <span className="font-semibold text-foreground">AI</span> Claude 4.5 Sonnet <ChevronDown size={14} />
+                        </button>
+
+                        <div className="flex items-center gap-2">
+                            <button className="p-2 text-muted-foreground hover:text-foreground transition-colors rounded-lg hover:bg-secondary">
+                                <Paperclip size={20} />
+                            </button>
+                            <button
+                                onClick={handleSend}
+                                className={`p-2 transition-all rounded-xl border border-border ${inputValue.trim()
+                                    ? 'bg-foreground text-background hover:opacity-90'
+                                    : 'bg-secondary text-muted-foreground hover:bg-muted'
+                                    }`}
+                            >
+                                <ArrowUp size={20} />
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+};
+
+export default FastMode;

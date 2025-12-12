@@ -1,0 +1,185 @@
+/* Shim for Tailwind classes used in MorphingDialog */
+
+.fixed {
+    position: fixed;
+}
+
+.inset-0 {
+    top: 0;
+    right: 0;
+    bottom: 0;
+    left: 0;
+}
+
+.h-full {
+    height: 100%;
+}
+
+.w-full {
+    width: 100%;
+}
+
+.bg-white\/40 {
+    background-color: rgba(255, 255, 255, 0.4);
+}
+
+.backdrop-blur-xs {
+    backdrop-filter: blur(2px);
+}
+
+.z-50 {
+    z-index: 50;
+}
+
+.flex {
+    display: flex;
+}
+
+.flex-col {
+    flex-direction: column;
+}
+
+.items-center {
+    align-items: center;
+}
+
+.justify-center {
+    justify-content: center;
+}
+
+.relative {
+    position: relative;
+}
+
+.cursor-pointer {
+    cursor: pointer;
+}
+
+.overflow-hidden {
+    overflow: hidden;
+}
+
+.absolute {
+    position: absolute;
+}
+
+.top-6 {
+    top: 1.5rem;
+}
+
+.right-6 {
+    right: 1.5rem;
+}
+
+.text-2xl {
+    font-size: 1.5rem;
+    line-height: 2rem;
+}
+
+.mt-2 {
+    margin-top: 0.5rem;
+}
+
+.p-6 {
+    padding: 1.5rem;
+}
+
+.rounded-full {
+    border-radius: 9999px;
+}
+
+.bg-black\/50 {
+    background-color: rgba(0, 0, 0, 0.5);
+}
+
+.text-white {
+    color: white;
+}
+
+.backdrop-blur-md {
+    backdrop-filter: blur(12px);
+}
+
+.hover\:bg-black\/70:hover {
+    background-color: rgba(0, 0, 0, 0.7);
+}
+
+.h-8 {
+    height: 2rem;
+}
+
+.w-8 {
+    width: 2rem;
+}
+
+/* Colors */
+.text-zinc-950 {
+    color: #09090b;
+}
+
+.text-zinc-700 {
+    color: #3f3f46;
+}
+
+.text-zinc-500 {
+    color: #71717a;
+}
+
+.text-zinc-50 {
+    color: #fafafa;
+}
+
+.bg-white {
+    background-color: white;
+}
+
+.border {
+    border-width: 1px;
+}
+
+.border-zinc-950\/10 {
+    border-color: rgba(9, 9, 11, 0.1);
+}
+
+.pointer-events-auto {
+    pointer-events: auto;
+}
+
+.pointer-events-none {
+    pointer-events: none;
+}
+
+/* Dark mode simple shim - assuming 'dark' class on body or media query. 
+   Using media query for simplicity if no class toggler. */
+@media (prefers-color-scheme: dark) {
+    .dark\:bg-black\/40 {
+        background-color: rgba(0, 0, 0, 0.4);
+    }
+
+    .dark\:text-zinc-50 {
+        color: #fafafa;
+    }
+
+    .dark\:text-zinc-400 {
+        color: #a1a1aa;
+    }
+
+    .dark\:text-zinc-500 {
+        color: #71717a;
+    }
+
+    .dark\:border-zinc-50\/10 {
+        border-color: rgba(250, 250, 250, 0.1);
+    }
+
+    .dark\:bg-zinc-900 {
+        background-color: #18181b;
+    }
+}
+
+/* Responsive */
+@media (min-width: 640px) {
+    .sm\:w-\[500px\] {
+        width: 500px;
+    }
+}

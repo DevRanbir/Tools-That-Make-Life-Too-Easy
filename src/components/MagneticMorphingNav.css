@@ -1,0 +1,67 @@
+.magnetic-nav {
+    position: relative;
+    display: flex;
+    align-items: center;
+    background-color: var(--card);
+    /* Capsule background */
+    border: 1px solid var(--muted);
+    /* Border */
+    border-radius: 9999px;
+    padding: 6px;
+    /* Slightly more padding for the container */
+    gap: 0px;
+    /* Gap handled by padding of items or just 0 */
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+    /* Subtle shadow */
+}
+
+.magnetic-nav-item {
+    position: relative;
+    padding: 10px 24px;
+    font-size: 0.875rem;
+    font-weight: 500;
+    border-radius: 9999px;
+    border: none;
+    background: transparent;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--muted-foreground);
+    transition: color 0.2s ease;
+    z-index: 10;
+}
+
+.magnetic-nav-item.active {
+    color: var(--foreground);
+}
+
+.magnetic-nav-item:hover {
+    color: var(--foreground);
+}
+
+.nav-pill-active {
+    position: absolute;
+    inset: 0;
+    background-color: var(--secondary);
+    border-radius: 9999px;
+    z-index: -10;
+}
+
+.nav-pill-hover {
+    position: absolute;
+    inset: 0;
+    background-color: var(--accent);
+    /* Opacity handled in inline or CSS with alpha if possible */
+    opacity: 0.3;
+    border-radius: 9999px;
+    z-index: -10;
+}
+
+.nav-content {
+    position: relative;
+    z-index: 10;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}

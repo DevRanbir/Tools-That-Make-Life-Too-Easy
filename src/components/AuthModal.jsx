@@ -1,0 +1,591 @@
+import React, { useState } from 'react';
+import { supabase } from '../supabase';
+import { X, Mail, Lock, ArrowRight, Sparkles, Upload, Check } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { Cropper, CropperImage, CropperCropArea } from './ui/cropper';
+
+const AuthModal = ({ isOpen, onClose, startStep = 0 }) => {
+    const [isSignUp, setIsSignUp] = useState(false);
+    const [loading, setLoading] = useState(false);
+    const [email, setEmail] = useState('');
+    const [password, setPassword] = useState('');
+    const [error, setError] = useState(null);
+
+    const [step, setStep] = useState(startStep); // 0: auth, 0.5: verify-email, 1: profile, 2: occupation, 3: preference
+    const [onboardingData, setOnboardingData] = useState({
+        username: '',
+        avatar: null, // preview URL
+        occupation: 'freelancer',
+        preference: 'mixed'
+    });
+    const fileInputRef = React.useRef(null);
+
+    // Cropper State
+    const [isCropping, setIsCropping] = useState(false);
+    const [originalImage, setOriginalImage] = useState(null);
+    const [crop, setCrop] = useState({ x: 0, y: 0, width: 0, height: 0 });
+    const [avatarBlob, setAvatarBlob] = useState(null);
+
+    // Reset state when opening/closing
+    React.useEffect(() => {
+        if (isOpen) {
+            setStep(startStep);
+            setError(null);
+            setIsSignUp(false);
+            setEmail('');
+            setPassword('');
+            // Reset onboarding visuals if needed, but keeping data might be nice? 
+            // Ideally reset if starting fresh
+            if (startStep === 0) {
+                // reset?
+            }
+        }
+    }, [isOpen, startStep]);
+
+    const handleAuth = async (e) => {
+        e.preventDefault();
+        setLoading(true);
+        setError(null);
+
+        try {
+            if (isSignUp) {
+                const { data, error } = await supabase.auth.signUp({
+                    email,
+                    password,
+                });
+                if (error) throw error;
+
+                if (data.user && !data.session) {
+                    setStep(0.5);
+                    return;
+                }
+
+                if (data.user && data.session) {
+                    setStep(1);
+                }
+            } else {
+                const { error } = await supabase.auth.signInWithPassword({
+                    email,
+                    password,
+                });
+                if (error) throw error;
+                onClose();
+            }
+        } catch (error) {
+            setError(error.message);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleFileSelect = (e) => {
+        const file = e.target.files[0];
+        if (file) {
+            const url = URL.createObjectURL(file);
+            setOriginalImage(url);
+            setIsCropping(true);
+        }
+        e.target.value = ''; // Reset input
+    };
+
+    const getCroppedImg = (imageSrc, crop) => {
+        return new Promise((resolve, reject) => {
+            const image = new Image();
+            image.src = imageSrc;
+            image.onload = () => {
+                const canvas = document.createElement('canvas');
+                const ctx = canvas.getContext('2d');
+
+                // scale logic
+                const scaleX = image.naturalWidth / image.width;
+                const scaleY = image.naturalHeight / image.height;
+                // Actually the `crop` from onCropChange uses pixels relative to the displayed image if we aren't careful?
+                // Wait, the docs said "relative to the original image's dimensions" in pixel.
+                // If the library returns pixels relative to intrinsic size, we use them directly.
+                // If it returns pixels relative to DOM element, we need scaling.
+                // Most modern libraries return relative to original if configured, or we infer.
+                // @origin-space/image-cropper onCropChange returns { x, y, width, height } in PIXELS of the original image? 
+                // The search result said "precise pixel coordinates ... relative to the original image's dimensions".
+                // So we can assume `crop` is correct for intrinsic size. 
+
+                // BUT `headless` components usually render an image 100% width. The `props` on Root/Image handle display.
+                // The `onCropChange` usually emits values that might need checking. 
+                // Let's assume standard behavior: if the image is responsive, the crop rect is usually visual.
+                // However, without a deep dive, valid standard is: use the emitted `crop` as truth. 
+
+                canvas.width = crop.width;
+                canvas.height = crop.height;
+
+                ctx.drawImage(
+                    image,
+                    crop.x,
+                    crop.y,
+                    crop.width,
+                    crop.height,
+                    0,
+                    0,
+                    crop.width,
+                    crop.height
+                );
+
+                canvas.toBlob((blob) => {
+                    if (!blob) {
+                        reject(new Error('Canvas is empty'));
+                        return;
+                    }
+                    resolve(blob);
+                }, 'image/png');
+            };
+            image.onerror = (e) => { reject(e); };
+        });
+    };
+
+    const handleCropConfirm = async () => {
+        if (!originalImage || !crop.width || !crop.height) return;
+        try {
+            const blob = await getCroppedImg(originalImage, crop);
+            const url = URL.createObjectURL(blob);
+            setAvatarBlob(blob);
+            setOnboardingData(prev => ({ ...prev, avatar: url }));
+            setIsCropping(false);
+        } catch (e) {
+            console.error(e);
+            alert("Failed to crop image");
+        }
+    };
+
+    const handleOnboardingSubmit = async () => {
+        setLoading(true);
+        try {
+            const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+            if (sessionError || !session) {
+                throw new Error("Auth session missing! Please verify your email or log in again.");
+            }
+
+            let finalAvatarUrl = null;
+
+            // Upload to Supabase Storage if we have a blob
+            if (avatarBlob) {
+                // Use static filename to avoid duplicates
+                const fileName = `${session.user.id}/avatar.png`;
+                const { error: uploadError } = await supabase.storage
+                    .from('avatars')
+                    .upload(fileName, avatarBlob, { upsert: true });
+
+                if (uploadError) {
+                    console.error("Storage upload failed:", uploadError);
+                    throw new Error(`Failed to upload avatar: ${uploadError.message}. Make sure 'avatars' bucket exists and is public.`);
+                } else {
+                    const { data: { publicUrl } } = supabase.storage
+                        .from('avatars')
+                        .getPublicUrl(fileName);
+                    // Add cache buster to force UI update
+                    finalAvatarUrl = `${publicUrl}?t=${Date.now()}`;
+                }
+            }
+
+            const updates = {
+                username: onboardingData.username,
+                occupation: onboardingData.occupation,
+                sort_preference: onboardingData.preference,
+                created_at: new Date(),
+                // Add avatar_url to user_metadata so Sidebar sees it immediately
+                avatar_url: finalAvatarUrl
+            };
+
+            // Supabase updateUser expects data to be in the root for some fields or inside 'data' for custom metadata? 
+            // Actually supabase.auth.updateUser({ data: { ... } }) updates user_metadata.
+            // My previous code had `data: updates` where `updates` contained flat fields. 
+            // `username` and others are custom fields, so they go into `user_metadata`.
+            // The method signature is updateUser({ data: { key: value } }).
+
+            if (finalAvatarUrl) {
+                updates.avatar_url = finalAvatarUrl;
+            }
+
+            const { error } = await supabase.auth.updateUser({
+                data: updates
+            });
+
+            if (error) throw error;
+
+            // Also create/update the user_details row
+            const { error: profileError } = await supabase
+                .from('user_details')
+                .upsert({
+                    id: session.user.id,
+                    username: onboardingData.username,
+                    occupation: onboardingData.occupation,
+                    sort_preference: onboardingData.preference,
+                    avatar_url: finalAvatarUrl || `https://ui-avatars.com/api/?name=${onboardingData.username}`
+                });
+
+            if (profileError) console.error("Error creating user profile:", profileError);
+            onClose();
+            // Refresh page or user to see avatar?
+            window.location.reload();
+        } catch (error) {
+            console.error(error);
+            setError(error.message || "Failed to save profile.");
+            if (error.message.includes("Auth session missing")) {
+                setTimeout(() => setStep(0), 2000);
+            }
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const stepVariants = {
+        initial: { opacity: 0, x: 20 },
+        animate: { opacity: 1, x: 0 },
+        exit: { opacity: 0, x: -20 }
+    };
+
+    if (!isOpen) return null;
+
+    return (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-md animate-in fade-in duration-300">
+            <div
+                className="w-full max-w-[380px] bg-[#050505] border border-zinc-800 rounded-3xl p-8 shadow-2xl relative overflow-hidden"
+                onClick={(e) => e.stopPropagation()}
+                style={{ maxHeight: '90vh', overflowY: 'auto' }}
+            >
+                <button
+                    onClick={onClose}
+                    className="absolute top-6 right-6 text-zinc-600 hover:text-zinc-200 transition-colors z-20"
+                >
+                    <X size={20} />
+                </button>
+
+                <AnimatePresence mode="wait">
+                    {/* ... Step 0, 0.5 ... (omitted for brevity in mental model, but keeping in file) */}
+
+                    {step === 0 && (
+                        <motion.div
+                            key="auth"
+                            initial="initial"
+                            animate="animate"
+                            exit="exit"
+                            variants={stepVariants}
+                            transition={{ duration: 0.2 }}
+                            className="flex flex-col"
+                        >
+                            <div className="mb-8 flex flex-col items-center text-center">
+                                <div className="w-12 h-12 bg-zinc-900/50 rounded-2xl flex items-center justify-center border border-zinc-800 mb-4 shadow-sm text-primary ring-1 ring-white/5">
+                                    <Sparkles size={20} fill="currentColor" className="opacity-80" />
+                                </div>
+                                <h2 className="text-xl font-bold text-white tracking-tight">
+                                    {isSignUp ? 'Create your account' : 'Welcome back'}
+                                </h2>
+                                <p className="text-zinc-500 text-sm mt-2 font-medium">
+                                    {isSignUp ? 'Start building your dream workspace.' : 'Enter your details to continue.'}
+                                </p>
+                            </div>
+
+                            <form onSubmit={handleAuth} className="space-y-4">
+                                <div className="space-y-1.5">
+                                    <div className="relative group">
+                                        <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-500 group-focus-within:text-white transition-colors" size={16} />
+                                        <input
+                                            type="email"
+                                            required
+                                            value={email}
+                                            onChange={(e) => setEmail(e.target.value)}
+                                            className="w-full bg-[#0F0F0F] border border-zinc-800 rounded-xl py-3.5 pl-11 pr-4 text-white text-sm outline-none focus:border-zinc-700 focus:bg-[#141414] transition-all font-medium placeholder:text-zinc-600"
+                                            placeholder="Email address"
+                                        />
+                                    </div>
+                                </div>
+
+                                <div className="space-y-1.5">
+                                    <div className="relative group">
+                                        <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-500 group-focus-within:text-white transition-colors" size={16} />
+                                        <input
+                                            type="password"
+                                            required
+                                            value={password}
+                                            onChange={(e) => setPassword(e.target.value)}
+                                            className="w-full bg-[#0F0F0F] border border-zinc-800 rounded-xl py-3.5 pl-11 pr-4 text-white text-sm outline-none focus:border-zinc-700 focus:bg-[#141414] transition-all font-medium placeholder:text-zinc-600"
+                                            placeholder="Password"
+                                        />
+                                    </div>
+                                </div>
+
+                                {error && (
+                                    <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-xl">
+                                        <p className="text-red-400 text-xs font-medium text-center">{error}</p>
+                                    </div>
+                                )}
+
+                                <button
+                                    type="submit"
+                                    disabled={loading}
+                                    className="w-full bg-white hover:bg-zinc-200 text-black font-bold py-3.5 rounded-xl transition-all flex items-center justify-center gap-2 mt-4 shadow-lg hover:shadow-xl hover:scale-[1.01] active:scale-[0.99]"
+                                >
+                                    {loading ? 'Processing...' : (isSignUp ? 'Continue' : 'Sign In')}
+                                    {!loading && <ArrowRight size={16} strokeWidth={2.5} />}
+                                </button>
+                            </form>
+
+                            <div className="mt-8 text-center">
+                                <p className="text-zinc-500 text-xs font-medium">
+                                    {isSignUp ? "Already have an account?" : "Don't have an account?"}
+                                    <button
+                                        onClick={() => setIsSignUp(!isSignUp)}
+                                        className="text-white hover:text-zinc-300 ml-1.5 font-bold transition-colors inline-flex items-center gap-1 group"
+                                    >
+                                        {isSignUp ? "Log in" : "Sign up"}
+                                    </button>
+                                </p>
+                            </div>
+                        </motion.div>
+                    )}
+
+                    {step === 0.5 && (
+                        <motion.div
+                            key="verify-email"
+                            initial="initial"
+                            animate="animate"
+                            exit="exit"
+                            variants={stepVariants}
+                            transition={{ duration: 0.2 }}
+                            className="flex flex-col items-center text-center"
+                        >
+                            <div className="w-16 h-16 bg-zinc-900 rounded-full flex items-center justify-center mb-6 ring-4 ring-zinc-900/50">
+                                <Mail size={32} className="text-white" />
+                            </div>
+                            <h2 className="text-xl font-bold text-white mb-2">Check your email</h2>
+                            <p className="text-zinc-500 text-sm mb-8 leading-relaxed">
+                                We've sent a verification link to <span className="text-white font-medium">{email}</span>.<br />
+                                Please verify your email to continue setting up your account.
+                            </p>
+
+                            <div className="w-full p-4 bg-zinc-900/50 rounded-xl border border-zinc-800 mb-6">
+                                <p className="text-xs text-zinc-400">
+                                    Once verified, you can log in to complete your profile setup.
+                                </p>
+                            </div>
+
+                            <button
+                                onClick={() => {
+                                    setStep(0);
+                                    setIsSignUp(false);
+                                }}
+                                className="w-full bg-white hover:bg-zinc-200 text-black font-bold py-3.5 rounded-xl transition-all"
+                            >
+                                Back to Login
+                            </button>
+                        </motion.div>
+                    )}
+
+                    {/* Step 1: Profile Setup */}
+                    {step === 1 && (
+                        <motion.div
+                            key="profile"
+                            initial="initial"
+                            animate="animate"
+                            exit="exit"
+                            variants={stepVariants}
+                            transition={{ duration: 0.2 }}
+                            className="flex flex-col items-center"
+                        >
+                            <h2 className="text-xl font-bold text-white mb-6">Setup Profile</h2>
+
+                            {isCropping && originalImage ? (
+                                <div className="w-full flex flex-col items-center gap-4 animate-in fade-in zoom-in duration-200">
+                                    <div className="relative w-full h-64 bg-zinc-900/50 rounded-xl overflow-hidden border border-zinc-800">
+                                        <Cropper
+                                            image={originalImage}
+                                            className="h-full w-full"
+                                            onCropChange={setCrop}
+                                        // You might need to adjust aspect ratio or other props if supported
+                                        // comp-560 usually has aspect ratio controls, here we trust defaults or 'free'
+                                        >
+                                            {/* The comp-560 example structure */}
+                                            <CropperImage />
+                                            <CropperCropArea className="rounded-full" />
+                                            {/* rounded-full because avatars are usually round, user context: "choosing the pfp" */}
+                                        </Cropper>
+                                    </div>
+                                    <div className="flex gap-3 w-full">
+                                        <button
+                                            onClick={() => { setIsCropping(false); setOriginalImage(null); }}
+                                            className="flex-1 py-2 rounded-lg bg-zinc-800 text-zinc-300 font-medium hover:bg-zinc-700 transition"
+                                        >
+                                            Cancel
+                                        </button>
+                                        <button
+                                            onClick={handleCropConfirm}
+                                            className="flex-1 py-2 rounded-lg bg-white text-black font-bold hover:bg-zinc-200 transition"
+                                        >
+                                            Save Photo
+                                        </button>
+                                    </div>
+                                </div>
+                            ) : (
+                                <>
+                                    <div
+                                        className="w-24 h-24 bg-zinc-900 rounded-full flex items-center justify-center border-2 border-dashed border-zinc-800 hover:border-zinc-600 cursor-pointer transition-colors relative mb-6 group overflow-hidden"
+                                        onClick={() => fileInputRef.current?.click()}
+                                    >
+                                        {onboardingData.avatar ? (
+                                            <img src={onboardingData.avatar} alt="Preview" className="w-full h-full object-cover" />
+                                        ) : (
+                                            <div className="flex flex-col items-center gap-1">
+                                                <Upload size={20} className="text-zinc-500 group-hover:text-zinc-300 transition-colors" />
+                                                <span className="text-[10px] text-zinc-600 font-medium">Upload</span>
+                                            </div>
+                                        )}
+                                        <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                                            <span className="text-[10px] text-white font-bold">Change</span>
+                                        </div>
+                                    </div>
+                                    <input
+                                        type="file"
+                                        ref={fileInputRef}
+                                        className="hidden"
+                                        accept="image/*"
+                                        onChange={handleFileSelect}
+                                    />
+
+                                    <div className="w-full space-y-1.5 mb-6">
+                                        <label className="text-[11px] font-bold text-zinc-500 uppercase tracking-wider ml-1">Username</label>
+                                        <input
+                                            type="text"
+                                            value={onboardingData.username}
+                                            onChange={(e) => setOnboardingData({ ...onboardingData, username: e.target.value })}
+                                            className="w-full bg-[#0F0F0F] border border-zinc-800 rounded-xl py-3 px-4 text-white text-sm outline-none focus:border-zinc-700 transition-all font-medium placeholder:text-zinc-700"
+                                            placeholder="@username"
+                                            autoFocus
+                                        />
+                                    </div>
+
+                                    <button
+                                        onClick={() => setStep(2)}
+                                        disabled={!onboardingData.username}
+                                        className="w-full bg-white hover:bg-zinc-200 text-black font-bold py-3.5 rounded-xl transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                                    >
+                                        Continue <ArrowRight size={16} />
+                                    </button>
+                                </>
+                            )}
+                        </motion.div>
+                    )}
+
+                    {step === 2 && (
+                        <motion.div
+                            key="occupation"
+                            initial="initial"
+                            animate="animate"
+                            exit="exit"
+                            variants={stepVariants}
+                            transition={{ duration: 0.2 }}
+                            className="flex flex-col"
+                        >
+                            <h2 className="text-xl font-bold text-white mb-2 text-center">What do you do?</h2>
+                            <p className="text-zinc-500 text-sm mb-6 text-center">This helps us customize your feed.</p>
+
+                            <div className="flex flex-col gap-3 mb-6">
+                                {['Student', 'Worker', 'Freelancer'].map((role) => (
+                                    <div
+                                        key={role}
+                                        onClick={() => setOnboardingData({ ...onboardingData, occupation: role.toLowerCase() })}
+                                        className={`p-4 rounded-xl border cursor-pointer transition-all flex items-center justify-between group ${onboardingData.occupation === role.toLowerCase()
+                                            ? 'bg-zinc-800/80 border-zinc-600 shadow-[0_0_15px_-3px_rgba(255,255,255,0.1)]'
+                                            : 'bg-[#0F0F0F] border-zinc-900/60 hover:border-zinc-800'
+                                            }`}
+                                    >
+                                        <div className="flex items-center gap-3">
+                                            {/* Simple visual indicator for each role */}
+                                            <div className={`w-8 h-8 rounded-full flex items-center justify-center ${onboardingData.occupation === role.toLowerCase() ? 'bg-white text-black' : 'bg-zinc-900 text-zinc-600'}`}>
+                                                {role === 'Student' && <span className="text-xs font-bold">🎓</span>}
+                                                {role === 'Worker' && <span className="text-xs font-bold">💼</span>}
+                                                {role === 'Freelancer' && <span className="text-xs font-bold">🚀</span>}
+                                            </div>
+                                            <span className={`font-medium transition-colors ${onboardingData.occupation === role.toLowerCase() ? 'text-white' : 'text-zinc-400 group-hover:text-zinc-300'}`}>{role}</span>
+                                        </div>
+
+                                        {onboardingData.occupation === role.toLowerCase() && (
+                                            <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} className="w-5 h-5 bg-white rounded-full flex items-center justify-center">
+                                                <Check size={12} className="text-black" strokeWidth={3} />
+                                            </motion.div>
+                                        )}
+                                    </div>
+                                ))}
+                            </div>
+
+                            <button
+                                onClick={() => setStep(3)}
+                                className="w-full bg-white hover:bg-zinc-200 text-black font-bold py-3.5 rounded-xl transition-all flex items-center justify-center gap-2"
+                            >
+                                Continue <ArrowRight size={16} />
+                            </button>
+                        </motion.div>
+                    )}
+
+                    {step === 3 && (
+                        <motion.div
+                            key="preference"
+                            initial="initial"
+                            animate="animate"
+                            exit="exit"
+                            variants={stepVariants}
+                            transition={{ duration: 0.2 }}
+                            className="flex flex-col"
+                        >
+                            <h2 className="text-xl font-bold text-white mb-2 text-center">Sorting Preference</h2>
+                            <p className="text-zinc-500 text-sm mb-6 text-center">How do you prefer to see tools sorted?</p>
+
+                            <div className="grid grid-cols-1 gap-3 mb-8">
+                                {[
+                                    { id: 'trending', label: 'Trending First', desc: 'Most popular tools at the top' },
+                                    { id: 'launch_recent', label: 'Newest First', desc: 'Freshly launched tools' },
+                                    { id: 'rating_dec', label: 'Top Rated', desc: 'Highest rated tools first' }
+                                ].map((pref) => (
+                                    <div
+                                        key={pref.id}
+                                        onClick={() => setOnboardingData({ ...onboardingData, preference: pref.id })}
+                                        className={`relative overflow-hidden p-4 rounded-xl border cursor-pointer transition-all flex items-center justify-between group ${onboardingData.preference === pref.id
+                                            ? 'bg-zinc-800/80 border-zinc-600 shadow-[0_0_15px_-3px_rgba(255,255,255,0.1)]'
+                                            : 'bg-[#0F0F0F] border-zinc-900/60 hover:border-zinc-800'
+                                            }`}
+                                    >
+                                        <div className="flex items-center gap-4 z-10">
+                                            <div className={`text-xs font-bold px-2 py-1 rounded-md uppercase tracking-wider ${onboardingData.preference === pref.id ? 'bg-white text-black' : 'bg-zinc-900 text-zinc-500'}`}>
+                                                {pref.label}
+                                            </div>
+                                            <span className={`text-sm font-medium ${onboardingData.preference === pref.id ? 'text-white' : 'text-zinc-400'}`}>
+                                                {pref.desc}
+                                            </span>
+                                        </div>
+                                        {onboardingData.preference === pref.id && (
+                                            <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} className="z-10 bg-white rounded-full p-1">
+                                                <Check size={12} className="text-black" />
+                                            </motion.div>
+                                        )}
+                                    </div>
+                                ))}
+                            </div>
+
+                            {error && (
+                                <div className="mb-4 p-3 bg-red-500/10 border border-red-500/20 rounded-xl">
+                                    <p className="text-red-400 text-xs font-medium text-center">{error}</p>
+                                </div>
+                            )}
+
+                            <button
+                                onClick={handleOnboardingSubmit}
+                                disabled={loading}
+                                className="w-full bg-white hover:bg-zinc-200 text-black font-bold py-3.5 rounded-xl transition-all flex items-center justify-center gap-2 shadow-lg hover:shadow-xl hover:scale-[1.01] active:scale-[0.99]"
+                            >
+                                {loading ? 'Saving...' : 'Finish Setup'}
+                            </button>
+                        </motion.div>
+                    )}
+                </AnimatePresence>
+            </div>
+        </div>
+    );
+};
+
+export default AuthModal;

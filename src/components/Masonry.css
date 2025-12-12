@@ -1,0 +1,117 @@
+.list {
+    position: relative;
+    width: 100%;
+    height: auto;
+    column-count: 1;
+    column-gap: 20px;
+}
+
+@media (min-width: 600px) {
+    .list {
+        column-count: 2;
+    }
+}
+
+@media (min-width: 1000px) {
+    .list {
+        column-count: 3;
+    }
+}
+
+@media (min-width: 1500px) {
+    .list {
+        column-count: 4;
+    }
+}
+
+.item-wrapper {
+    position: relative;
+    break-inside: avoid;
+    margin-bottom: 20px;
+    will-change: transform, opacity;
+    cursor: pointer;
+}
+
+.item-wrapper .item-img {
+    position: relative;
+    background-size: cover;
+    background-position: center center;
+    width: 100%;
+    height: 100%;
+    text-transform: uppercase;
+    font-size: 10px;
+    line-height: 10px;
+    border-radius: 10px;
+    box-shadow: 0px 10px 50px -10px rgba(0, 0, 0, 0.2);
+}
+
+/* Overlay Container */
+/* Overlay Container - Deprecated/Removed for new Card Design */
+/* .masonry-overlay { ... } */
+
+/* Title */
+.masonry-title {
+    margin: 0;
+    font-size: 1.1rem; /* Slightly larger */
+    font-weight: 800; /* Bolder */
+    padding-right: 30px;
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
+    transition: transform 0.3s ease;
+    letter-spacing: -0.02em; /* Tighter tracking for "smooth" look */
+}
+
+/* Author: Hidden by default, shown on hover */
+.masonry-author {
+    margin: 0;
+    font-size: 0.8rem;
+    opacity: 0;
+    height: 0;
+    transform: translateY(10px);
+    transition: all 0.3s ease;
+    overflow: hidden;
+}
+
+.item-wrapper:hover .masonry-author {
+    opacity: 0.8;
+    height: auto;
+    transform: translateY(0);
+    margin-top: 4px;
+    /* Space from title */
+}
+
+/* Description: Hidden by default, shown on hover on TOP of blur */
+.masonry-description {
+    opacity: 0;
+    max-height: 0;
+    transform: translateY(10px);
+    transition: all 0.3s ease 0.1s;
+    /* Slight delay */
+    overflow: hidden;
+    margin-top: 0;
+}
+
+.masonry-description p {
+    margin: 0;
+    font-size: 0.75rem;
+    opacity: 0.9;
+}
+
+.item-wrapper:hover .masonry-description {
+    opacity: 1;
+    max-height: 60px;
+    transform: translateY(0);
+    margin-top: 8px;
+    /* Space from author */
+}
+
+/* Expand Icon */
+.card-expand-icon {
+    opacity: 0;
+    transform: scale(0.8) rotate(-45deg);
+    transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+.item-wrapper:hover .card-expand-icon {
+    opacity: 1;
+    transform: scale(1) rotate(0deg);
+}
