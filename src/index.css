@@ -1,5 +1,5 @@
 @import "tailwindcss";
-@import url('https://fonts.googleapis.com/css2?family=AR+One+Sans:wght@400;500;600;700&family=Adamina&display=swap');
+/* Font imported in index.html */
 /* Geist Mono is likely not on Google Fonts, using monospace fallback */
 
 :root {
@@ -197,9 +197,9 @@ body {
   /* Fixed Positioning to prevent layout shift */
   position: fixed;
   left: 0;
-  top: 40%;
-  /* Moved up from 50% */
-  transform: translateY(-50%);
+  top: 50%;
+  /* Moved to center */
+  transform: translateY(-52%);
 
   /* "]" shape attached to left */
   border: 1px solid var(--border);
@@ -242,7 +242,7 @@ body {
 
 /* Specific alignment for larger PFP (32px) */
 .sidebar-icon.pfp-icon {
-  padding-left: 9px;
+  padding-left: 12px;
 }
 
 .sidebar.expanded .sidebar-icon {
@@ -595,7 +595,8 @@ input:checked+.slider:before {
 }
 
 /* Cards Grid */
-.grid {
+/* Cards Grid - Renamed from .grid to avoid conflict with Tailwind */
+.cards-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
   gap: 1.5rem;
@@ -806,6 +807,55 @@ input:checked+.slider:before {
   box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
 }
 
+.filter-chip-container {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.75rem;
+  margin-bottom: 2rem;
+  padding: 0 1rem;
+  max-width: 800px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.filter-chip {
+  background-color: var(--card);
+  border: 1px solid var(--border);
+  color: var(--muted-foreground);
+  padding: 8px 16px;
+  border-radius: 99px;
+  font-size: 0.9rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  user-select: none;
+}
+
+.filter-chip:hover {
+  background-color: var(--secondary);
+  color: var(--foreground);
+  transform: translateY(-1px);
+}
+
+.filter-chip.selected {
+  background-color: var(--foreground);
+  color: var(--background);
+  border-color: var(--foreground);
+  padding-right: 12px;
+  /* Adjust for X icon */
+}
+
+.filter-chip.selected:hover {
+  opacity: 0.9;
+  background-color: var(--foreground);
+}
+
+
+
 .sc-icon {
   font-size: 1rem;
 }
@@ -933,5 +983,5 @@ input:checked+.slider:before {
   scrollbar-color: transparent transparent;
   scrollbar-track-color: transparent;
 
-  
+
 }

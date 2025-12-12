@@ -63,7 +63,7 @@ const TopBar = ({ darkMode, setDarkMode, onAuthClick, user, navigateOnly, sortPr
             <div className="topbar-right">
                 {user ? (
                     <button className="start-now-btn">
-                        <span>@{user.user_metadata?.username || user.email?.split('@')[0]}</span>
+                        <span>@{user.user_metadata?.username || user.email?.split('@')[0]} has {user.user_metadata?.credits !== undefined ? user.user_metadata.credits : 0} credits</span>
                     </button>
                 ) : (
                     <button className="start-now-btn" onClick={onAuthClick}>

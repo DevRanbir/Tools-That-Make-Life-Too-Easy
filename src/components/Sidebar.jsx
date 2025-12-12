@@ -1,5 +1,5 @@
 import React, { useState, useId } from 'react';
-import { Home, Search, Tag, Monitor, Ticket, Settings, Plus, Moon as MoonIcon, Sun as SunIcon, Heart, ShoppingBag } from 'lucide-react';
+import { Home, Search, Tag, Monitor, Ticket, Settings, Plus, Moon as MoonIcon, Sun as SunIcon, Heart, ShoppingBag, Calendar as CalendarIcon, Database } from 'lucide-react';
 
 const Switch = ({ checked, onCheckedChange, className, id, ...props }) => {
     return (
@@ -24,7 +24,7 @@ const Switch = ({ checked, onCheckedChange, className, id, ...props }) => {
 
 import SmoothDrawer from './SmoothDrawer';
 
-const Sidebar = ({ activePage, setActivePage, darkMode, setDarkMode, onAuthClick, user, isSettingsOpen, setIsSettingsOpen }) => {
+const Sidebar = ({ activePage, setActivePage, darkMode, setDarkMode, onAuthClick, user, isSettingsOpen, setIsSettingsOpen, rightSidebarMode, setRightSidebarMode }) => {
     const [isExpanded, setIsExpanded] = useState(false);
     const switchId = useId();
 
@@ -48,8 +48,11 @@ const Sidebar = ({ activePage, setActivePage, darkMode, setDarkMode, onAuthClick
         { id: 'manual', icon: Home, label: 'Home' },
         { id: 'search', icon: Search, label: 'Search' },
         { id: 'tags', icon: Tag, label: 'Tags' },
-        // Show 'For You' only if user is logged in
-        ...(user ? [{ id: 'home', icon: Heart, label: 'For You' }] : []),
+        ...(user ? [
+            { id: 'home', icon: Heart, label: 'For You' },
+            { id: 'data', icon: Database, label: 'Data' },
+            { id: 'calendar', icon: CalendarIcon, label: 'Calendar' },
+        ] : []),
         { id: 'shop', icon: ShoppingBag, label: 'Shop' },
     ];
 
@@ -114,6 +117,9 @@ const Sidebar = ({ activePage, setActivePage, darkMode, setDarkMode, onAuthClick
                     setDarkMode={setDarkMode}
                     open={isSettingsOpen}
                     onOpenChange={setIsSettingsOpen}
+                    rightSidebarMode={rightSidebarMode}
+                    setRightSidebarMode={setRightSidebarMode}
+                    setActivePage={setActivePage}
                     trigger={
                         <div className={`sidebar-icon cursor-pointer`}>
                             <Settings size={22} className="min-w-[22px]" />
@@ -126,16 +132,33 @@ const Sidebar = ({ activePage, setActivePage, darkMode, setDarkMode, onAuthClick
 
                 {user ? (
                     <div className={`sidebar-icon pfp-icon bg-transparent hover:bg-zinc-800`}>
-                        {user.user_metadata?.avatar_url ? (
-                            <img src={user.user_metadata.avatar_url} alt="Profile" className="w-8 h-8 min-w-[32px] rounded-full object-cover" />
-                        ) : (
-                            <div className="w-8 h-8 min-w-[32px] rounded-full bg-primary/20 flex items-center justify-center text-xs font-bold text-primary">
-                                {user.email?.[0].toUpperCase()}
+                        <div className="relative">
+                            {user.user_metadata?.avatar_url ? (
+                                <img src={user.user_metadata.avatar_url} alt="Profile" className="w-8 h-8 min-w-[32px] rounded-full object-cover" />
+                            ) : (
+                                <div className="w-8 h-8 min-w-[32px] rounded-full bg-primary/20 flex items-center justify-center text-xs font-bold text-primary">
+                                    {user.email?.[0].toUpperCase()}
+                                </div>
+                            )}
+                            {/* Badge: Visible when collapsed, hidden when expanded */}
+                            <div className={`absolute -top-1 -right-1 w-4 h-4 rounded-full bg-zinc-900 border border-zinc-800 flex items-center justify-center transition-all duration-300 ease-out ${isExpanded ? 'scale-0 opacity-0' : 'scale-100 opacity-100'}`}>
+                                <span style={{ color: 'var(--destructive)' }} className="text-[9px] font-bold">
+                                    {(user.user_metadata?.role || 'freebiee').charAt(0).toUpperCase()}
+                                </span>
                             </div>
-                        )}
+                        </div>
                         <div className="sidebar-text ml-3 flex flex-col justify-center overflow-hidden whitespace-nowrap">
-                            <span className="text-sm font-medium truncate block w-full text-left">@{user.user_metadata?.username || user.email?.split('@')[0] || 'User'}</span>
-                            <span className="text-sm text-zinc-500 truncate block w-full text-left">{user.email}</span>
+                            <span className="text-sm font-medium truncate block w-full text-left flex items-center">
+                                {/* Prefix: Visible when expanded, hidden when collapsed */}
+                                <span
+                                    style={{ color: 'var(--destructive)' }}
+                                    className={`font-bold mr-0.5 inline-block origin-left transition-all duration-300 ease-out ${isExpanded ? 'scale-100 opacity-100 w-auto' : 'scale-0 opacity-0 w-0'}`}
+                                >
+                                    {(user.user_metadata?.role || 'freebiee').charAt(0).toUpperCase()}
+                                </span>
+                                @{user.user_metadata?.username || user.email?.split('@')[0] || 'User'}
+                            </span>
+                            <span className="text-[10px] text-zinc-500 truncate block w-full text-left">{user.email}</span>
                         </div>
                     </div>
                 ) : (
@@ -147,7 +170,7 @@ const Sidebar = ({ activePage, setActivePage, darkMode, setDarkMode, onAuthClick
                     </div>
                 )}
             </div>
-        </div>
+        </div >
     );
 };
 

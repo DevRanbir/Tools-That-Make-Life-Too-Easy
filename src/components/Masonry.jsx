@@ -1,8 +1,8 @@
-
 import { useEffect, useLayoutEffect, useRef } from 'react';
 import { gsap } from 'gsap';
 import { Bookmark, ArrowUpRight } from 'lucide-react';
 import { MasonryCard } from './MasonryCard';
+import { supabase } from '../supabase';
 import {
     MorphingDialog,
     MorphingDialogContent,
@@ -19,6 +19,7 @@ import './Masonry.css';
 const Masonry = ({
     items,
     onBookmark,
+    onLike,
     user,
     ease = 'power3.out',
     duration = 0.6,
@@ -79,6 +80,15 @@ const Masonry = ({
         }
     };
 
+    const handleLike = (item, e) => {
+        e.stopPropagation();
+        if (onLike) {
+            onLike(item.id);
+        } else {
+            console.warn("onLike prop not provided to Masonry");
+        }
+    };
+
     return (
         <div ref={containerRef} className="list">
             {items.map(item => {
@@ -124,6 +134,27 @@ const Masonry = ({
                                     </div>
 
                                     <div className="flex items-center gap-4">
+                                        {/* Like Button */}
+                                        <button
+                                            onClick={(e) => handleLike(item, e)}
+                                            className={`transition-colors p-2 rounded-full ${item.isLiked ? 'text-red-500' : 'text-muted-foreground hover:text-foreground'}`}
+                                            title={item.isLiked ? "Unlike" : "Like"}
+                                        >
+                                            <svg
+                                                xmlns="http://www.w3.org/2000/svg"
+                                                width="20"
+                                                height="20"
+                                                viewBox="0 0 24 24"
+                                                fill={item.isLiked ? "currentColor" : "none"}
+                                                stroke="currentColor"
+                                                strokeWidth="2"
+                                                strokeLinecap="round"
+                                                strokeLinejoin="round"
+                                            >
+                                                <path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z" />
+                                            </svg>
+                                        </button>
+
                                         <button
                                             onClick={(e) => {
                                                 e.stopPropagation();
@@ -183,8 +214,8 @@ const Masonry = ({
                                                     {item.views || 0}
                                                 </div>
                                                 <div className="flex items-center gap-1.5">
-                                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" /></svg>
-                                                    {item.saves || 0}
+                                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z" /></svg>
+                                                    {item.likes || 0}
                                                 </div>
                                             </div>
                                         </div>

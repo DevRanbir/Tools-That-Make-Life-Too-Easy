@@ -9,6 +9,9 @@ import FastMode from './pages/FastMode';
 import Manage from './pages/Manage';
 import SearchPage from './pages/Search';
 import ShopPage from './pages/Shop';
+import CalendarPage from './pages/Calendar';
+import DataPage from './pages/Data';
+import TagsPage from './pages/Tags';
 // import ForYou from './pages/ForYou'; // Reusing Trending for now as requested "same as 2nd"
 
 import { supabase } from './supabase';
@@ -25,22 +28,55 @@ const App = () => {
 
   const [authStartStep, setAuthStartStep] = useState(0);
 
-  // Initialize theme and check URL route
   useEffect(() => {
     if (darkMode) {
       document.documentElement.classList.add('dark');
     } else {
       document.documentElement.classList.remove('dark');
     }
-
-    // specific check for /manage route
-    if (window.location.pathname === '/manage') {
-      setActivePage('manage');
-    }
-    if (window.location.pathname === '/search') {
-      setActivePage('search');
-    }
   }, [darkMode]);
+
+  // Handle URL synchronization
+  useEffect(() => {
+    // 1. Handle browser back/forward buttons & Initial Load
+    const handlePopState = () => {
+      const path = window.location.pathname;
+      if (path === '/manage') setActivePage('manage');
+      else if (path === '/search') setActivePage('search');
+      else if (path === '/tags') setActivePage('tags');
+      else if (path === '/fast') setActivePage('fastmode');
+      else if (path === '/shop') setActivePage('shop');
+      else if (path === '/calendar') setActivePage('calendar');
+      else if (path === '/data') setActivePage('data');
+      else if (path === '/for-you') setActivePage('home');
+      else setActivePage('manual'); // Default to manual (root)
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    handlePopState(); // Trigger on mount
+
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
+
+  // 2. Sync state to URL
+  useEffect(() => {
+    let path = '/';
+    if (activePage === 'manage') path = '/manage';
+    else if (activePage === 'search') path = '/search';
+    else if (activePage === 'tags') path = '/tags';
+    else if (activePage === 'fastmode') path = '/fast';
+    else if (activePage === 'shop') path = '/shop';
+    else if (activePage === 'calendar') path = '/calendar';
+    else if (activePage === 'data') path = '/data';
+    else if (activePage === 'home') path = '/for-you';
+    else path = '/'; // manual
+
+    if (window.location.pathname !== path) {
+      // Preserve hash if it exists (e.g. for search)
+      const hash = window.location.hash;
+      window.history.pushState({}, '', path + hash);
+    }
+  }, [activePage]);
 
   // Check auth state
   useEffect(() => {
@@ -87,8 +123,11 @@ const App = () => {
     }
   };
 
-  const handleAuthClick = () => {
-    setAuthStartStep(0); // Regular login/signup
+  const [authMode, setAuthMode] = useState('default');
+
+  const handleAuthClick = (step = 0, mode = 'default') => {
+    setAuthStartStep(typeof step === 'number' ? step : 0);
+    setAuthMode(mode);
     setShowAuthModal(true);
   };
 
@@ -98,13 +137,17 @@ const App = () => {
       case 'fastmode': return <FastMode navigateOnly={setActivePage} user={user} messages={chatMessages} setMessages={setChatMessages} />;
       case 'manual': return <Manual navigateOnly={setActivePage} pageName="Manual" user={user} sortPreference={sortPreference} />;
       case 'search': return <SearchPage navigateOnly={setActivePage} user={user} sortPreference={sortPreference} />;
+      case 'tags': return <TagsPage navigateOnly={setActivePage} user={user} sortPreference={sortPreference} />;
       case 'shop': return <ShopPage navigateOnly={setActivePage} user={user} sortPreference={sortPreference} />;
+      case 'calendar': return user ? <CalendarPage navigateOnly={setActivePage} user={user} sortPreference={sortPreference} /> : <Manual navigateOnly={setActivePage} pageName="Manual" user={user} sortPreference={sortPreference} />;
+      case 'data': return user ? <DataPage navigateOnly={setActivePage} user={user} sortPreference={sortPreference} /> : <Manual navigateOnly={setActivePage} pageName="Manual" user={user} sortPreference={sortPreference} />;
       case 'manage': return <Manage navigateOnly={setActivePage} />;
       default: return <Home navigateOnly={setActivePage} sortPreference={sortPreference} />;
     }
   };
 
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [rightSidebarMode, setRightSidebarMode] = useState('full'); // 'full' | 'events' | 'saved' | 'hidden'
 
   // ...
 
@@ -120,8 +163,14 @@ const App = () => {
           user={user}
           isSettingsOpen={isSettingsOpen}
           setIsSettingsOpen={setIsSettingsOpen}
+          rightSidebarMode={rightSidebarMode}
+          setRightSidebarMode={setRightSidebarMode}
         />
-        <RightSidebar user={user} isSettingsOpen={isSettingsOpen} />
+        <RightSidebar
+          user={user}
+          isSettingsOpen={isSettingsOpen}
+          mode={rightSidebarMode}
+        />
         <TopBar
           darkMode={darkMode}
           setDarkMode={setDarkMode}
@@ -139,6 +188,8 @@ const App = () => {
         isOpen={showAuthModal}
         onClose={() => setShowAuthModal(false)}
         startStep={authStartStep}
+        mode={authMode}
+        user={user}
       />
     </div>
   );

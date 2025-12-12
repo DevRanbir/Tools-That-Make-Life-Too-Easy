@@ -9,6 +9,7 @@ import { ScrollTrigger } from 'gsap/ScrollTrigger';
 import { supabase } from '../supabase';
 
 gsap.registerPlugin(ScrollTrigger);
+import CongustedPricing from '../components/mvpblocks/congusted-pricing';
 
 const ShopPage = ({ navigateOnly, user, sortPreference }) => {
     const gridRef = useRef(null);
@@ -192,6 +193,116 @@ const ShopPage = ({ navigateOnly, user, sortPreference }) => {
         }
     };
 
+    const [activeTab, setActiveTab] = useState('buy_roles');
+
+    const shopTabs = [
+        { id: 'buy_roles', label: 'Buy Roles' },
+        { id: 'buy_credits', label: 'Buy Credits' }
+    ];
+
+    const rolePlans = [
+        {
+            name: "Common",
+            price: "5",
+            yearlyPrice: "4",
+            period: "per month",
+            features: [
+                "Role Badge: Common",
+                "150 Monthly Credits",
+                "Basic Support",
+                "Access to Standard Tools"
+            ],
+            description: "A great start for regular users.",
+            buttonText: "Upgrade to Common",
+            href: "#",
+            isPopular: false,
+        },
+        {
+            name: "Wealthy",
+            price: "15",
+            yearlyPrice: "12",
+            period: "per month",
+            features: [
+                "Role Badge: Wealthy",
+                "500 Monthly Credits",
+                "Priority Support",
+                "Access to Premium Tools",
+                "Early Access to New Features"
+            ],
+            description: "For power users who need more.",
+            buttonText: "Upgrade to Wealthy",
+            href: "#",
+            isPopular: true,
+        },
+        {
+            name: "Administrator",
+            price: "50",
+            yearlyPrice: "40",
+            period: "per month",
+            features: [
+                "Role Badge: Administrator",
+                "1000 Monthly Credits",
+                "Dedicated Support",
+                "All Tools Unlocked",
+                "Admin Dashboard Access"
+            ],
+            description: "Complete control and maximum power.",
+            buttonText: "become Administrator",
+            href: "#",
+            isPopular: false,
+        },
+    ];
+
+    const creditPlans = [
+        {
+            name: "Credit Pack S",
+            price: "5",
+            yearlyPrice: "5", // One-time pruchase logic usually, but fitting component structure
+            period: "one-time",
+            features: [
+                "100 Credits",
+                "Never Expire",
+                "Instant Delivery"
+            ],
+            description: "Top up your balance.",
+            buttonText: "Buy 100 Credits",
+            href: "#",
+            isPopular: false,
+        },
+        {
+            name: "Credit Pack M",
+            price: "20",
+            yearlyPrice: "20",
+            period: "one-time",
+            features: [
+                "500 Credits",
+                "Never Expire",
+                "Instant Delivery",
+                "Bonus: 50 Extra Credits"
+            ],
+            description: "Best value for regular usage.",
+            buttonText: "Buy 500 Credits",
+            href: "#",
+            isPopular: true,
+        },
+        {
+            name: "Credit Pack L",
+            price: "50",
+            yearlyPrice: "50",
+            period: "one-time",
+            features: [
+                "1500 Credits",
+                "Never Expire",
+                "Instant Delivery",
+                "Bonus: 200 Extra Credits"
+            ],
+            description: "Stock up for big projects.",
+            buttonText: "Buy 1500 Credits",
+            href: "#",
+            isPopular: false,
+        },
+    ];
+
     return (
         <div className="feed-page min-h-screen bg-background relative pb-32">
             <div className="hero-sticky-wrapper">
@@ -230,7 +341,36 @@ const ShopPage = ({ navigateOnly, user, sortPreference }) => {
                 </div>
             </div>
 
+
             <div className="content-overlay content-area pt-24">
+                {(user?.user_metadata?.role || 'freebiee') === 'freebiee' && (
+                    <div className="mb-20">
+                        <div className="flex justify-center mb-8">
+                            <MagneticMorphingNav
+                                tabs={shopTabs}
+                                activeTab={activeTab}
+                                onTabChange={setActiveTab}
+                            />
+                        </div>
+
+                        {activeTab === 'buy_roles' && (
+                            <CongustedPricing
+                                title="Upgrade Your Role"
+                                description="Unlock more monthly credits and exclusive features."
+                                plans={rolePlans}
+                            />
+                        )}
+
+                        {activeTab === 'buy_credits' && (
+                            <CongustedPricing
+                                title="Top Up Credits"
+                                description="Need more power? Buy credits that never expire."
+                                plans={creditPlans}
+                                showToggle={false}
+                            />
+                        )}
+                    </div>
+                )}
 
                 <div
                     ref={gridRef}

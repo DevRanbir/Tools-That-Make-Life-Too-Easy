@@ -57,6 +57,7 @@ const Manual = ({ navigateOnly, pageName = 'Manual', user, sortPreference }) => 
                     height: Math.floor(Math.random() * (600 - 300 + 1) + 300),
                     url: '#',
                     isBookmarked: userBookmarks.has(doc.id),
+                    isLiked: Array.isArray(doc.liked_by) && user ? doc.liked_by.includes(user.id) : false,
                     onView: async (id) => {
                         if (!user) return;
 
@@ -184,6 +185,52 @@ const Manual = ({ navigateOnly, pageName = 'Manual', user, sortPreference }) => 
         }
     };
 
+    const handleLike = async (id) => {
+        if (!user) {
+            alert("Please login to like items.");
+            return;
+        }
+
+        const product = products.find(p => p.id === id);
+        if (!product) return;
+
+        const wasLiked = product.isLiked;
+        const newLikedState = !wasLiked;
+        const currentLikes = product.likes || 0;
+        const newLikesCount = newLikedState ? currentLikes + 1 : Math.max(0, currentLikes - 1);
+
+        // Optimistic Update
+        let newLikedBy = product.liked_by || [];
+        if (newLikedState) {
+            if (!newLikedBy.includes(user.id)) newLikedBy = [...newLikedBy, user.id];
+        } else {
+            newLikedBy = newLikedBy.filter(uid => uid !== user.id);
+        }
+
+        setProducts(prev => prev.map(p =>
+            p.id === id ? { ...p, isLiked: newLikedState, likes: newLikesCount, liked_by: newLikedBy } : p
+        ));
+
+        try {
+            const { error } = await supabase
+                .from('products')
+                .update({
+                    likes: newLikesCount,
+                    liked_by: newLikedBy
+                })
+                .eq('id', id);
+
+            if (error) throw error;
+        } catch (err) {
+            console.error("Like failed", err);
+            // Revert
+            setProducts(prev => prev.map(p =>
+                p.id === id ? { ...p, isLiked: wasLiked, likes: currentLikes, liked_by: product.liked_by } : p
+            ));
+            alert(`Failed to update like: ${err.message || 'Check console'} `);
+        }
+    };
+
     return (
         <div className="feed-page min-h-screen bg-background relative pb-32">
             <div className="hero-sticky-wrapper">
@@ -192,7 +239,15 @@ const Manual = ({ navigateOnly, pageName = 'Manual', user, sortPreference }) => 
                         Tools That Make Life <br /> Too Easy
                     </h1>
                     <p className="hero-subtitle">
-                        {totalTools.toLocaleString()} <span className="text-destructive font-bold">AI tools</span> and 0 <span className="text-destructive">tasks done</span>
+                        {pageName === 'For You' ? (
+                            <>
+                                showing {products.length} <span className="text-destructive font-bold">AI tool{products.length !== 1 ? 's' : ''} you saved</span>
+                            </>
+                        ) : (
+                            <>
+                                {totalTools.toLocaleString()} <span className="text-destructive font-bold">AI tools</span> and 0 <span className="text-destructive">tasks done</span>
+                            </>
+                        )}
                     </p>
 
                     <div className="hero-search-wrapper">
@@ -262,6 +317,7 @@ const Manual = ({ navigateOnly, pageName = 'Manual', user, sortPreference }) => 
                         blurToFocus={true}
                         colorShiftOnHover={false}
                         onBookmark={handleBookmark}
+                        onLike={handleLike}
                         user={user}
                     />
                 </div>

@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { TrendingUp, Search } from 'lucide-react';
+import { Search, X } from 'lucide-react';
 import MagneticMorphingNav from '../components/MagneticMorphingNav';
 import Masonry from '../components/Masonry';
 import { useRef, useState, useEffect } from 'react';
@@ -10,35 +10,25 @@ import { supabase } from '../supabase';
 
 gsap.registerPlugin(ScrollTrigger);
 
-const SearchPage = ({ navigateOnly, user, sortPreference }) => {
+const TagsPage = ({ navigateOnly, user, sortPreference }) => {
     const gridRef = useRef(null);
-    const [products, setProducts] = useState([]);
-    const [filteredProducts, setFilteredProducts] = useState([]); // Store filtered results
+    const [products, setProducts] = useState([]); // All products
+    // filteredProducts is what we show in the grid
+    const [displayedProducts, setDisplayedProducts] = useState([]);
+
+    // Tag State
+    const [allTags, setAllTags] = useState([]);
+    const [visibleTags, setVisibleTags] = useState([]); // Filtered by search
+    const [selectedTag, setSelectedTag] = useState(null);
+    const [tagSearchQuery, setTagSearchQuery] = useState('');
+
     const [totalTools, setTotalTools] = useState(0);
     const viewedIds = useRef(new Set());
-    const [searchQuery, setSearchQuery] = useState('');
 
-    useEffect(() => {
-        // Handle hash-based search on mount and hash change
-        const handleHashChange = () => {
-            const hash = window.location.hash;
-            if (hash) {
-                const query = decodeURIComponent(hash.substring(1)); // Remove the '#'
-                setSearchQuery(query);
-            } else {
-                setSearchQuery('');
-            }
-        };
-
-        handleHashChange(); // Initial check
-        window.addEventListener('hashchange', handleHashChange);
-        return () => window.removeEventListener('hashchange', handleHashChange);
-    }, []);
-
+    // 1. Fetch Products & Extract Tags
     useEffect(() => {
         const fetchProducts = async () => {
             try {
-                // 1. Fetch Products
                 let query = supabase
                     .from('products')
                     .select('*')
@@ -53,22 +43,31 @@ const SearchPage = ({ navigateOnly, user, sortPreference }) => {
 
                 setTotalTools(productsData.length);
 
-                // 2. Fetch User Bookmarks (if logged in)
+                // Extract Tags
+                const tagsSet = new Set();
+                productsData.forEach(p => {
+                    if (Array.isArray(p.tags)) {
+                        p.tags.forEach(t => tagsSet.add(t));
+                    }
+                });
+                const sortedTags = Array.from(tagsSet).sort();
+                setAllTags(sortedTags);
+                setVisibleTags(sortedTags);
+
+                // Fetch Bookmarks for product state
                 let userBookmarks = new Set();
                 if (user) {
-                    const { data: bookmarkData, error: bookmarkError } = await supabase
+                    const { data: bookmarkData } = await supabase
                         .from('bookmarks')
                         .select('product_id')
                         .eq('user_id', user.id);
 
-                    if (bookmarkError) {
-                        console.error("Error fetching bookmarks:", bookmarkError);
-                    } else if (bookmarkData) {
+                    if (bookmarkData) {
                         bookmarkData.forEach(b => userBookmarks.add(b.product_id));
                     }
                 }
 
-                // 3. Process Data
+                // Process Products
                 let processedProducts = productsData.map(doc => ({
                     ...doc,
                     img: doc.image,
@@ -77,6 +76,7 @@ const SearchPage = ({ navigateOnly, user, sortPreference }) => {
                     isBookmarked: userBookmarks.has(doc.id),
                     isLiked: Array.isArray(doc.liked_by) && user ? doc.liked_by.includes(user.id) : false,
                     onView: async (id) => {
+                        // View counting logic (same as other pages)
                         if (!user) return;
                         if (viewedIds.current.has(id)) return;
                         viewedIds.current.add(id);
@@ -84,7 +84,7 @@ const SearchPage = ({ navigateOnly, user, sortPreference }) => {
                         setProducts(prev => prev.map(p =>
                             p.id === id ? { ...p, views: (p.views || 0) + 1 } : p
                         ));
-
+                        // Optimistic update handled locally mostly
                         const { error } = await supabase.rpc('increment_views', { row_id: id });
                         if (error) console.error("Error incrementing views:", error);
                     }
@@ -98,21 +98,26 @@ const SearchPage = ({ navigateOnly, user, sortPreference }) => {
         fetchProducts();
     }, [user]);
 
-    // Filter products when products or searchQuery changes
+    // 2. Filter Tags based on Search
     useEffect(() => {
-        if (!searchQuery) {
-            setFilteredProducts([]); // Don't show anything by default
+        if (!tagSearchQuery) {
+            setVisibleTags(allTags);
         } else {
-            const lowerQuery = searchQuery.toLowerCase();
-            const filtered = products.filter(p =>
-                (p.title && p.title.toLowerCase().includes(lowerQuery)) ||
-                (p.name && p.name.toLowerCase().includes(lowerQuery)) ||
-                (p.description && p.description.toLowerCase().includes(lowerQuery))
-            );
+            const lowerQuery = tagSearchQuery.toLowerCase();
+            setVisibleTags(allTags.filter(t => t.toLowerCase().includes(lowerQuery)));
+        }
+    }, [tagSearchQuery, allTags]);
 
-            // Sorting implementation (Client-side)
+    // 3. Filter Products based on Selected Tag
+    useEffect(() => {
+        if (!selectedTag) {
+            setDisplayedProducts([]); // Show nothing if no tag selected
+        } else {
+            let filtered = products.filter(p => p.tags && p.tags.includes(selectedTag));
+
+            // Apply Sort Preference
             let sorted = [...filtered];
-            // Same sort logic as Manual.jsx
+            // Reusing sort logic for consistency
             switch (sortPreference) {
                 case 'launch_recent': sorted.sort((a, b) => new Date(b.created_at) - new Date(a.created_at)); break;
                 case 'launch_old': sorted.sort((a, b) => new Date(a.created_at) - new Date(b.created_at)); break;
@@ -133,50 +138,39 @@ const SearchPage = ({ navigateOnly, user, sortPreference }) => {
                 case 'trending':
                 default: sorted.sort((a, b) => (b.views || 0) - (a.views || 0)); break;
             }
-
-            setFilteredProducts(sorted);
+            setDisplayedProducts(sorted);
         }
-    }, [products, searchQuery, sortPreference]);
-
-
-    // Fetch bookmarks manually on this page if needed, or share logical fetch? 
-    // Wait, Manual.jsx keeps `products` state internal. Search.jsx does too.
-    // We need to fetch bookmarks here as well to show correct state.
-    useEffect(() => {
-        const fetchBookmarks = async () => {
-            if (!user) return;
-            const { data: userData } = await supabase
-                .from('user_details')
-                .select('bookmarks')
-                .eq('id', user.id)
-                .single();
-
-            if (userData && userData.bookmarks) {
-                const bSet = new Set(userData.bookmarks);
-                setProducts(prev => prev.map(p => ({ ...p, isBookmarked: bSet.has(p.id) })));
-            }
-        };
-        if (products.length > 0) fetchBookmarks();
-    }, [products.length, user]);
+    }, [selectedTag, products, sortPreference]);
 
     const handleBookmark = async (id) => {
         if (!user) {
             alert("Please login to bookmark items.");
             return;
         }
-
         const product = products.find(p => p.id === id);
         if (!product) return;
-
         const newStatus = !product.isBookmarked;
 
-        // Optimistic Update
         const updateList = (list) => list.map(p =>
             p.id === id ? { ...p, isBookmarked: newStatus } : p
         );
 
         setProducts(updateList);
-        setFilteredProducts(updateList);
+        setDisplayedProducts(updateList); // Also update displayed list (NOTE: this might re-filter/sort if displayedProducts is derived, but here it's state)
+        // Actually displayedProducts is state, but we need to update 'products' (source) too?
+        // In the original code, `setDisplayedProducts` was updated but `products` should also be updated because filtering uses it?
+        // The original code only updated `products`. Wait, let check...
+        // Original code: setProducts(updateList); setDisplayedProducts(updateList);  <- Confirmed.
+        // Wait, updateList iterates 'list'. If current list is 'products', it updates that.
+        // We need to apply map to BOTH products and displayedProducts.
+        // Actually the passed 'list' param is confusing.
+        // Let's rewrite safely.
+
+        const updateAll = products.map(p => p.id === id ? { ...p, isBookmarked: newStatus } : p);
+        const updateDisplayed = displayedProducts.map(p => p.id === id ? { ...p, isBookmarked: newStatus } : p);
+
+        setProducts(updateAll);
+        setDisplayedProducts(updateDisplayed);
 
         try {
             const { error } = await supabase.rpc('toggle_bookmark', { product_id: id });
@@ -184,11 +178,10 @@ const SearchPage = ({ navigateOnly, user, sortPreference }) => {
         } catch (err) {
             console.error("Bookmark failed", err);
             // Revert
-            const revertList = (list) => list.map(p =>
-                p.id === id ? { ...p, isBookmarked: !newStatus } : p
-            );
-            setProducts(revertList);
-            setFilteredProducts(revertList);
+            const revertAll = products.map(p => p.id === id ? { ...p, isBookmarked: !newStatus } : p);
+            const revertDisplayed = displayedProducts.map(p => p.id === id ? { ...p, isBookmarked: !newStatus } : p);
+            setProducts(revertAll);
+            setDisplayedProducts(revertDisplayed);
             alert(`Failed to update bookmark: ${err.message || 'Check console'} `);
         }
     };
@@ -206,9 +199,8 @@ const SearchPage = ({ navigateOnly, user, sortPreference }) => {
         const newLikedState = !wasLiked;
         const currentLikes = product.likes || 0;
         const newLikesCount = newLikedState ? currentLikes + 1 : Math.max(0, currentLikes - 1);
-        
+
         // Optimistic Update
-        // Update local arrays (liked_by) for consistency if we re-visit
         let newLikedBy = product.liked_by || [];
         if (newLikedState) {
             if (!newLikedBy.includes(user.id)) newLikedBy = [...newLikedBy, user.id];
@@ -216,21 +208,18 @@ const SearchPage = ({ navigateOnly, user, sortPreference }) => {
             newLikedBy = newLikedBy.filter(uid => uid !== user.id);
         }
 
-        const updateList = (list) => list.map(p =>
-            p.id === id ? { ...p, isLiked: newLikedState, likes: newLikesCount, liked_by: newLikedBy } : p
-        );
+        const updateAll = products.map(p => p.id === id ? { ...p, isLiked: newLikedState, likes: newLikesCount, liked_by: newLikedBy } : p);
+        const updateDisplayed = displayedProducts.map(p => p.id === id ? { ...p, isLiked: newLikedState, likes: newLikesCount, liked_by: newLikedBy } : p);
 
-        setProducts(updateList);
-        setFilteredProducts(updateList);
+        setProducts(updateAll);
+        setDisplayedProducts(updateDisplayed);
 
         try {
-            // Try to use direct update assuming 'liked_by' column exists and we have RLS permissions
-            // If toggle_like RPC exists use that, but we fallback to direct update
             const { error } = await supabase
                 .from('products')
-                .update({ 
+                .update({
                     likes: newLikesCount,
-                    liked_by: newLikedBy 
+                    liked_by: newLikedBy
                 })
                 .eq('id', id);
 
@@ -238,11 +227,10 @@ const SearchPage = ({ navigateOnly, user, sortPreference }) => {
         } catch (err) {
             console.error("Like failed", err);
             // Revert
-             const revertList = (list) => list.map(p =>
-                p.id === id ? { ...p, isLiked: wasLiked, likes: currentLikes, liked_by: product.liked_by } : p
-            );
-            setProducts(revertList);
-            setFilteredProducts(revertList);
+            const revertAll = products.map(p => p.id === id ? { ...p, isLiked: wasLiked, likes: currentLikes, liked_by: product.liked_by } : p);
+            const revertDisplayed = displayedProducts.map(p => p.id === id ? { ...p, isLiked: wasLiked, likes: currentLikes, liked_by: product.liked_by } : p);
+            setProducts(revertAll);
+            setDisplayedProducts(revertDisplayed);
             alert(`Failed to update like: ${err.message || 'Check console'} `);
         }
     };
@@ -259,66 +247,69 @@ const SearchPage = ({ navigateOnly, user, sortPreference }) => {
                     </p>
 
                     <div className="hero-search-wrapper">
+                        {/* 1. Search Bar for Tags */}
                         <div className="big-search-bar">
                             <input
                                 type="text"
-                                placeholder="Search..."
-                                value={searchQuery}
-                                onChange={(e) => {
-                                    const newVal = e.target.value;
-                                    setSearchQuery(newVal);
-                                    // Update hash without flooding history
-                                    if (newVal) {
-                                        window.history.replaceState(null, null, `#${encodeURIComponent(newVal)}`);
-                                    } else {
-                                        window.history.replaceState(null, null, window.location.pathname);
-                                    }
-                                }}
+                                placeholder="Search tags..."
+                                value={tagSearchQuery}
+                                onChange={(e) => setTagSearchQuery(e.target.value)}
                             />
                             <div className="search-actions">
                                 <span className="kbd">CTRL + K</span>
                                 <button className="search-btn"><Search size={18} /></button>
                             </div>
                         </div>
-                        <div className="hero-footer-text">#Start typing to search.</div>
+                        <div className="hero-footer-text">#Select a tag to view tools</div>
+
+                        {/* 2. Chips Container */}
+                        <div className="filter-chip-container mt-4">
+                            {visibleTags.map(tag => (
+                                <div
+                                    key={tag}
+                                    className={`filter-chip ${selectedTag === tag ? 'selected' : ''}`}
+                                    onClick={() => setSelectedTag(prev => prev === tag ? null : tag)}
+                                >
+                                    {tag}
+                                    {selectedTag === tag && <X size={14} />}
+                                </div>
+                            ))}
+                            {visibleTags.length === 0 && (
+                                <div className="text-muted-foreground text-sm">No tags found</div>
+                            )}
+                        </div>
                     </div>
                 </div>
             </div>
 
             <div className="content-overlay content-area pt-24">
-
                 <div
                     ref={gridRef}
                     className="masonry-wrapper"
                     style={{ margin: '0 auto', width: '100%', maxWidth: '100%', padding: '0 20px' }}
                 >
-                    {searchQuery ? (
-                        <>
-                            <div className="section-header" style={{ alignItems: 'flex-start', marginBottom: 10 }}>
-                                <div className="trending-title">
-                                    <Search size={24} /> {`Search Results for "${searchQuery}"`}
-                                </div>
-                            </div>
+                    {/* 3. Grid (Only if tag selected) */}
+                    {selectedTag && (
+                        <Masonry
+                            items={displayedProducts}
+                            ease="power3.out"
+                            duration={0.6}
+                            stagger={0.05}
+                            animateFrom="bottom"
+                            scaleOnHover={true}
+                            hoverScale={0.95}
+                            blurToFocus={true}
+                            colorShiftOnHover={false}
+                            onBookmark={handleBookmark}
+                            onLike={handleLike}
+                            user={user}
+                        />
+                    )}
 
-                            <Masonry
-                                items={filteredProducts}
-                                ease="power3.out"
-                                duration={0.6}
-                                stagger={0.05}
-                                animateFrom="bottom"
-                                scaleOnHover={true}
-                                hoverScale={0.95}
-                                blurToFocus={true}
-                                colorShiftOnHover={false}
-                                onBookmark={handleBookmark}
-                                onLike={handleLike}
-                                user={user}
-                            />
-                        </>
-                    ) : (
-                        <div className="flex flex-col items-center justify-center p-12 mt-24 text-muted-foreground">
+                    {!selectedTag && (
+                        <div className="flex flex-col items-center justify-center p-12 text-muted-foreground">
                             <Search size={48} strokeWidth={1} className="mb-4 opacity-50" />
-                            <p>Start typing above to search for tools</p>
+                            <p>Select a tag above to explore tools</p>
                         </div>
                     )}
                 </div>
@@ -327,4 +318,4 @@ const SearchPage = ({ navigateOnly, user, sortPreference }) => {
     );
 };
 
-export default SearchPage;
+export default TagsPage;

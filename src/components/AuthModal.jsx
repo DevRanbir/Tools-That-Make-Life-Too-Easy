@@ -4,7 +4,7 @@ import { X, Mail, Lock, ArrowRight, Sparkles, Upload, Check } from 'lucide-react
 import { motion, AnimatePresence } from 'framer-motion';
 import { Cropper, CropperImage, CropperCropArea } from './ui/cropper';
 
-const AuthModal = ({ isOpen, onClose, startStep = 0 }) => {
+const AuthModal = ({ isOpen, onClose, startStep = 0, mode = 'default', user }) => {
     const [isSignUp, setIsSignUp] = useState(false);
     const [loading, setLoading] = useState(false);
     const [email, setEmail] = useState('');
@@ -32,15 +32,26 @@ const AuthModal = ({ isOpen, onClose, startStep = 0 }) => {
             setStep(startStep);
             setError(null);
             setIsSignUp(false);
-            setEmail('');
-            setPassword('');
-            // Reset onboarding visuals if needed, but keeping data might be nice? 
-            // Ideally reset if starting fresh
-            if (startStep === 0) {
-                // reset?
+            if (!user) {
+                setEmail('');
+                setPassword('');
             }
         }
-    }, [isOpen, startStep]);
+    }, [isOpen, startStep, user]);
+
+
+    // Pre-fill data if user exists
+    React.useEffect(() => {
+        if (user) {
+            setOnboardingData(prev => ({
+                ...prev,
+                username: user.user_metadata?.username || '',
+                occupation: user.user_metadata?.occupation || 'freelancer',
+                preference: user.user_metadata?.sort_preference || 'mixed',
+                avatar: user.user_metadata?.avatar_url || null
+            }));
+        }
+    }, [user, isOpen]);
 
     const handleAuth = async (e) => {
         e.preventDefault();
@@ -96,23 +107,6 @@ const AuthModal = ({ isOpen, onClose, startStep = 0 }) => {
                 const canvas = document.createElement('canvas');
                 const ctx = canvas.getContext('2d');
 
-                // scale logic
-                const scaleX = image.naturalWidth / image.width;
-                const scaleY = image.naturalHeight / image.height;
-                // Actually the `crop` from onCropChange uses pixels relative to the displayed image if we aren't careful?
-                // Wait, the docs said "relative to the original image's dimensions" in pixel.
-                // If the library returns pixels relative to intrinsic size, we use them directly.
-                // If it returns pixels relative to DOM element, we need scaling.
-                // Most modern libraries return relative to original if configured, or we infer.
-                // @origin-space/image-cropper onCropChange returns { x, y, width, height } in PIXELS of the original image? 
-                // The search result said "precise pixel coordinates ... relative to the original image's dimensions".
-                // So we can assume `crop` is correct for intrinsic size. 
-
-                // BUT `headless` components usually render an image 100% width. The `props` on Root/Image handle display.
-                // The `onCropChange` usually emits values that might need checking. 
-                // Let's assume standard behavior: if the image is responsive, the crop rect is usually visual.
-                // However, without a deep dive, valid standard is: use the emitted `crop` as truth. 
-
                 canvas.width = crop.width;
                 canvas.height = crop.height;
 
@@ -166,7 +160,6 @@ const AuthModal = ({ isOpen, onClose, startStep = 0 }) => {
 
             // Upload to Supabase Storage if we have a blob
             if (avatarBlob) {
-                // Use static filename to avoid duplicates
                 const fileName = `${session.user.id}/avatar.png`;
                 const { error: uploadError } = await supabase.storage
                     .from('avatars')
@@ -174,30 +167,31 @@ const AuthModal = ({ isOpen, onClose, startStep = 0 }) => {
 
                 if (uploadError) {
                     console.error("Storage upload failed:", uploadError);
-                    throw new Error(`Failed to upload avatar: ${uploadError.message}. Make sure 'avatars' bucket exists and is public.`);
+                    // Continue anyway, maybe just avatar failed
                 } else {
                     const { data: { publicUrl } } = supabase.storage
                         .from('avatars')
                         .getPublicUrl(fileName);
-                    // Add cache buster to force UI update
                     finalAvatarUrl = `${publicUrl}?t=${Date.now()}`;
                 }
+            } else if (onboardingData.avatar && onboardingData.avatar.startsWith('http')) {
+                finalAvatarUrl = onboardingData.avatar;
             }
 
             const updates = {
                 username: onboardingData.username,
                 occupation: onboardingData.occupation,
                 sort_preference: onboardingData.preference,
-                created_at: new Date(),
-                // Add avatar_url to user_metadata so Sidebar sees it immediately
-                avatar_url: finalAvatarUrl
+                updated_at: new Date(),
+                // Default setup for new users (or existing ones updating)
+                // We should only set defaults if they don't exist, but here we might just overwrite for setup?
+                // Actually, user might already have roles if they logged in before. 
+                // We should probably NOT overwrite role/credits if they exist on the user object?
+                // But the user object in this scope is `session.user`.
+                // Let's assume on first setup we default them.
+                role: user?.user_metadata?.role || 'freebiee',
+                credits: user?.user_metadata?.credits !== undefined ? user.user_metadata.credits : 0
             };
-
-            // Supabase updateUser expects data to be in the root for some fields or inside 'data' for custom metadata? 
-            // Actually supabase.auth.updateUser({ data: { ... } }) updates user_metadata.
-            // My previous code had `data: updates` where `updates` contained flat fields. 
-            // `username` and others are custom fields, so they go into `user_metadata`.
-            // The method signature is updateUser({ data: { key: value } }).
 
             if (finalAvatarUrl) {
                 updates.avatar_url = finalAvatarUrl;
@@ -217,19 +211,17 @@ const AuthModal = ({ isOpen, onClose, startStep = 0 }) => {
                     username: onboardingData.username,
                     occupation: onboardingData.occupation,
                     sort_preference: onboardingData.preference,
-                    avatar_url: finalAvatarUrl || `https://ui-avatars.com/api/?name=${onboardingData.username}`
+                    avatar_url: finalAvatarUrl || `https://ui-avatars.com/api/?name=${onboardingData.username}`,
+                    role: updates.role,
+                    credits: updates.credits
                 });
 
             if (profileError) console.error("Error creating user profile:", profileError);
             onClose();
-            // Refresh page or user to see avatar?
             window.location.reload();
         } catch (error) {
             console.error(error);
             setError(error.message || "Failed to save profile.");
-            if (error.message.includes("Auth session missing")) {
-                setTimeout(() => setStep(0), 2000);
-            }
         } finally {
             setLoading(false);
         }
@@ -244,7 +236,7 @@ const AuthModal = ({ isOpen, onClose, startStep = 0 }) => {
     if (!isOpen) return null;
 
     return (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-md animate-in fade-in duration-300">
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/80 backdrop-blur-md animate-in fade-in duration-300">
             <div
                 className="w-full max-w-[380px] bg-[#050505] border border-zinc-800 rounded-3xl p-8 shadow-2xl relative overflow-hidden"
                 onClick={(e) => e.stopPropagation()}
@@ -258,8 +250,6 @@ const AuthModal = ({ isOpen, onClose, startStep = 0 }) => {
                 </button>
 
                 <AnimatePresence mode="wait">
-                    {/* ... Step 0, 0.5 ... (omitted for brevity in mental model, but keeping in file) */}
-
                     {step === 0 && (
                         <motion.div
                             key="auth"
@@ -360,12 +350,6 @@ const AuthModal = ({ isOpen, onClose, startStep = 0 }) => {
                                 Please verify your email to continue setting up your account.
                             </p>
 
-                            <div className="w-full p-4 bg-zinc-900/50 rounded-xl border border-zinc-800 mb-6">
-                                <p className="text-xs text-zinc-400">
-                                    Once verified, you can log in to complete your profile setup.
-                                </p>
-                            </div>
-
                             <button
                                 onClick={() => {
                                     setStep(0);
@@ -378,7 +362,6 @@ const AuthModal = ({ isOpen, onClose, startStep = 0 }) => {
                         </motion.div>
                     )}
 
-                    {/* Step 1: Profile Setup */}
                     {step === 1 && (
                         <motion.div
                             key="profile"
@@ -398,13 +381,9 @@ const AuthModal = ({ isOpen, onClose, startStep = 0 }) => {
                                             image={originalImage}
                                             className="h-full w-full"
                                             onCropChange={setCrop}
-                                        // You might need to adjust aspect ratio or other props if supported
-                                        // comp-560 usually has aspect ratio controls, here we trust defaults or 'free'
                                         >
-                                            {/* The comp-560 example structure */}
                                             <CropperImage />
                                             <CropperCropArea className="rounded-full" />
-                                            {/* rounded-full because avatars are usually round, user context: "choosing the pfp" */}
                                         </Cropper>
                                     </div>
                                     <div className="flex gap-3 w-full">
@@ -448,24 +427,32 @@ const AuthModal = ({ isOpen, onClose, startStep = 0 }) => {
                                         onChange={handleFileSelect}
                                     />
 
-                                    <div className="w-full space-y-1.5 mb-6">
-                                        <label className="text-[11px] font-bold text-zinc-500 uppercase tracking-wider ml-1">Username</label>
-                                        <input
-                                            type="text"
-                                            value={onboardingData.username}
-                                            onChange={(e) => setOnboardingData({ ...onboardingData, username: e.target.value })}
-                                            className="w-full bg-[#0F0F0F] border border-zinc-800 rounded-xl py-3 px-4 text-white text-sm outline-none focus:border-zinc-700 transition-all font-medium placeholder:text-zinc-700"
-                                            placeholder="@username"
-                                            autoFocus
-                                        />
-                                    </div>
+                                    {mode !== 'avatar_only' && (
+                                        <div className="w-full space-y-1.5 mb-6">
+                                            <label className="text-[11px] font-bold text-zinc-500 uppercase tracking-wider ml-1">Username</label>
+                                            <input
+                                                type="text"
+                                                value={onboardingData.username}
+                                                onChange={(e) => setOnboardingData({ ...onboardingData, username: e.target.value })}
+                                                className="w-full bg-[#0F0F0F] border border-zinc-800 rounded-xl py-3 px-4 text-white text-sm outline-none focus:border-zinc-700 transition-all font-medium placeholder:text-zinc-700"
+                                                placeholder="@username"
+                                                autoFocus
+                                            />
+                                        </div>
+                                    )}
 
                                     <button
-                                        onClick={() => setStep(2)}
-                                        disabled={!onboardingData.username}
+                                        onClick={() => {
+                                            if (mode === 'avatar_only') {
+                                                handleOnboardingSubmit();
+                                            } else {
+                                                setStep(2);
+                                            }
+                                        }}
+                                        disabled={(!onboardingData.username && mode !== 'avatar_only')}
                                         className="w-full bg-white hover:bg-zinc-200 text-black font-bold py-3.5 rounded-xl transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                                     >
-                                        Continue <ArrowRight size={16} />
+                                        {mode === 'avatar_only' ? 'Save Avatar' : 'Continue'} {(mode !== 'avatar_only') && <ArrowRight size={16} />}
                                     </button>
                                 </>
                             )}
@@ -496,7 +483,6 @@ const AuthModal = ({ isOpen, onClose, startStep = 0 }) => {
                                             }`}
                                     >
                                         <div className="flex items-center gap-3">
-                                            {/* Simple visual indicator for each role */}
                                             <div className={`w-8 h-8 rounded-full flex items-center justify-center ${onboardingData.occupation === role.toLowerCase() ? 'bg-white text-black' : 'bg-zinc-900 text-zinc-600'}`}>
                                                 {role === 'Student' && <span className="text-xs font-bold">🎓</span>}
                                                 {role === 'Worker' && <span className="text-xs font-bold">💼</span>}
@@ -504,7 +490,6 @@ const AuthModal = ({ isOpen, onClose, startStep = 0 }) => {
                                             </div>
                                             <span className={`font-medium transition-colors ${onboardingData.occupation === role.toLowerCase() ? 'text-white' : 'text-zinc-400 group-hover:text-zinc-300'}`}>{role}</span>
                                         </div>
-
                                         {onboardingData.occupation === role.toLowerCase() && (
                                             <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} className="w-5 h-5 bg-white rounded-full flex items-center justify-center">
                                                 <Check size={12} className="text-black" strokeWidth={3} />
@@ -550,17 +535,17 @@ const AuthModal = ({ isOpen, onClose, startStep = 0 }) => {
                                             : 'bg-[#0F0F0F] border-zinc-900/60 hover:border-zinc-800'
                                             }`}
                                     >
-                                        <div className="flex items-center gap-4 z-10">
-                                            <div className={`text-xs font-bold px-2 py-1 rounded-md uppercase tracking-wider ${onboardingData.preference === pref.id ? 'bg-white text-black' : 'bg-zinc-900 text-zinc-500'}`}>
+                                        <div className="flex flex-col gap-1 z-10">
+                                            <span className={`text-sm font-bold ${onboardingData.preference === pref.id ? 'text-white' : 'text-zinc-300'}`}>
                                                 {pref.label}
-                                            </div>
-                                            <span className={`text-sm font-medium ${onboardingData.preference === pref.id ? 'text-white' : 'text-zinc-400'}`}>
+                                            </span>
+                                            <span className={`text-xs font-medium ${onboardingData.preference === pref.id ? 'text-zinc-300' : 'text-zinc-500'}`}>
                                                 {pref.desc}
                                             </span>
                                         </div>
                                         {onboardingData.preference === pref.id && (
                                             <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} className="z-10 bg-white rounded-full p-1">
-                                                <Check size={12} className="text-black" />
+                                                <Check size={12} className="text-black" strokeWidth={3} />
                                             </motion.div>
                                         )}
                                     </div>

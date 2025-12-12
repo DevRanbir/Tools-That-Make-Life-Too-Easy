@@ -106,9 +106,15 @@ export function MasonryCard({ item, imageHeight, handleMouseEnter, handleMouseLe
                     {/* Row 1 */}
                     <div className="flex items-center justify-between text-xs text-muted-foreground">
                         <span>{formatTimeAgo(item.created_at)}</span>
-                        <div className="flex items-center gap-1 text-foreground font-medium">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-muted-foreground"><line x1="18" y1="20" x2="18" y2="10" /><line x1="12" y1="20" x2="12" y2="4" /><line x1="6" y1="20" x2="6" y2="14" /></svg>
-                            <span>{item.views ? item.views.toLocaleString() : "0"}</span>
+                        <div className="flex items-center gap-3">
+                            <div className="flex items-center gap-1 text-foreground font-medium">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-muted-foreground"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z" /></svg>
+                                <span>{item.likes ? item.likes.toLocaleString() : "0"}</span>
+                            </div>
+                            <div className="flex items-center gap-1 text-foreground font-medium">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-muted-foreground"><line x1="18" y1="20" x2="18" y2="10" /><line x1="12" y1="20" x2="12" y2="4" /><line x1="6" y1="20" x2="6" y2="14" /></svg>
+                                <span>{item.views ? item.views.toLocaleString() : "0"}</span>
+                            </div>
                         </div>
                     </div>
 
