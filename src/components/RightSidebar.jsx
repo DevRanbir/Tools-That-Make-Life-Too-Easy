@@ -1,10 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { Bookmark } from 'lucide-react';
+import { Bookmark, Settings } from 'lucide-react';
 import { supabase } from '../supabase';
 
-const RightSidebar = ({ user, isSettingsOpen, mode = 'full' }) => {
+const RightSidebar = ({ user, isSettingsOpen, mode = 'full', setActivePage }) => {
     const [isExpanded, setIsExpanded] = useState(false);
     const [bookmarks, setBookmarks] = useState([]);
+
+    // Check if user is administrator
+    const isAdministrator = user?.user_metadata?.role === 'administrator';
 
     // Mock Data for Events (You would likely fetch this via a hook or prop)
     const [ongoingEvents, setOngoingEvents] = useState([]);
@@ -172,9 +175,9 @@ const RightSidebar = ({ user, isSettingsOpen, mode = 'full' }) => {
     };
 
     const isVisible = user && mode !== 'hidden' && (
-        (mode === 'full' && (bookmarks.length > 0 || ongoingEvents.length > 0 || upcomingEvents.length > 0)) ||
-        (mode === 'saved' && bookmarks.length > 0) ||
-        (mode === 'events' && (ongoingEvents.length > 0 || upcomingEvents.length > 0))
+        (mode === 'full' && (bookmarks.length > 0 || ongoingEvents.length > 0 || upcomingEvents.length > 0 || isAdministrator)) ||
+        (mode === 'saved' && (bookmarks.length > 0 || isAdministrator)) ||
+        (mode === 'events' && (ongoingEvents.length > 0 || upcomingEvents.length > 0 || isAdministrator))
     );
 
     // Inline styles to mirror the left sidebar without touching index.css
@@ -212,6 +215,34 @@ const RightSidebar = ({ user, isSettingsOpen, mode = 'full' }) => {
             onMouseEnter={handleMouseEnter}
             onMouseLeave={handleMouseLeave}
         >
+            {/* ADMIN SECTION */}
+            {isAdministrator && (
+                <>
+                    <div className={`w-full flex flex-col mb-[2px] transition-all duration-300 items-end pr-[10px] ${isExpanded ? 'pl-[20px]' : ''}`}>
+                        <span className={`text-[10px] font-bold tracking-wider text-right transition-opacity duration-300 ${isExpanded ? 'opacity-100' : 'opacity-60'}`}>
+                            ADMIN
+                        </span>
+                    </div>
+
+                    <div className="flex flex-col gap-[2px] w-full mb-4">
+                        <div
+                            className={`group w-full h-[48px] flex items-center justify-end pr-[10px] ${isExpanded ? 'pl-[20px]' : ''} text-muted-foreground cursor-pointer relative transition-all duration-200 hover:text-foreground hover:opacity-100 opacity-60`}
+                            onClick={() => setActivePage('manage')}
+                        >
+                            <span
+                                className={`text-sm font-medium whitespace-nowrap overflow-hidden mr-3 transition-all duration-300 ease-in-out ${isExpanded ? 'opacity-100 max-w-[200px] pointer-events-auto' : 'opacity-0 max-w-0 pointer-events-none'}`}
+                            >
+                                Manage Page
+                            </span>
+
+                            <div className="min-w-[40px] w-[40px] h-[40px] flex items-center justify-center rounded-xl overflow-hidden bg-background border border-border group-hover:scale-105 transition-transform duration-200 shadow-sm">
+                                <Settings size={20} />
+                            </div>
+                        </div>
+                    </div>
+                </>
+            )}
+
             {/* EVENTS SECTION */}
             {user && (mode === 'full' || mode === 'events') && (ongoingEvents.length > 0 || upcomingEvents.length > 0) && (
                 <>

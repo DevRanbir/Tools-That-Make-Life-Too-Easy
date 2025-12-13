@@ -4,7 +4,7 @@ import { ArrowUpRight } from 'lucide-react';
 import { ProgressiveBlur } from './progressive-blur';
 import { MorphingDialogTrigger } from './morphing-dialog';
 
-export function MasonryCard({ item, imageHeight, handleMouseEnter, handleMouseLeave }) {
+export function MasonryCard({ item, imageHeight, handleMouseEnter, handleMouseLeave, disableMorph }) {
     const [isHover, setIsHover] = useState(false);
 
     const onEnter = (e) => {
@@ -34,14 +34,7 @@ export function MasonryCard({ item, imageHeight, handleMouseEnter, handleMouseLe
         return `Released ${days}d ago`;
     };
 
-    return (
-        <MorphingDialogTrigger
-            style={{ width: '100%', height: '100%', padding: 0, border: 'none', background: 'none', display: 'block', textAlign: 'left' }}
-            className="w-full h-full"
-            onClick={() => {
-                if (item.onView) item.onView(item.id);
-            }}
-        >
+    const CardContent = (
             <div
                 className="group relative flex h-full w-full flex-col justify-between rounded-2xl border border-border bg-card p-5 transition-all hover:border-ring shadow-sm hover:shadow-md"
                 onMouseEnter={onEnter}
@@ -144,6 +137,26 @@ export function MasonryCard({ item, imageHeight, handleMouseEnter, handleMouseLe
                     </div>
                 )}
             </div>
+        );
+
+    if (disableMorph) {
+        return (
+            <div className="w-full h-full block text-left p-0 border-none bg-none">
+                {CardContent}
+            </div>
+        );
+    }
+
+    return (
+        <MorphingDialogTrigger
+            style={{ width: '100%', height: '100%', padding: 0, border: 'none', background: 'none', display: 'block', textAlign: 'left' }}
+            className="w-full h-full"
+            onClick={() => {
+                if (item.onView) item.onView(item.id);
+            }}
+        >
+            {CardContent}
         </MorphingDialogTrigger>
     );
+
 }

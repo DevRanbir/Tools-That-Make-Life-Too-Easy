@@ -20,6 +20,7 @@ const Masonry = ({
     items,
     onBookmark,
     onLike,
+    onItemClick,
     user,
     ease = 'power3.out',
     duration = 0.6,
@@ -92,6 +93,28 @@ const Masonry = ({
     return (
         <div ref={containerRef} className="list">
             {items.map(item => {
+                if (onItemClick) {
+                    return (
+                        <div
+                            key={item.id}
+                            className="item-wrapper cursor-pointer"
+                            onMouseEnter={e => handleMouseEnter(e, item)}
+                            onMouseLeave={e => handleMouseLeave(e, item)}
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                onItemClick(item);
+                            }}
+                        >
+                            <MasonryCard
+                                item={item}
+                                disableMorph={true}
+                                handleMouseEnter={handleMouseEnter}
+                                handleMouseLeave={handleMouseLeave}
+                            />
+                        </div>
+                    );
+                }
+
                 return (
                     <MorphingDialog
                         key={item.id}

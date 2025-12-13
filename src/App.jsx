@@ -203,7 +203,7 @@ const App = () => {
       case 'shop': return <ShopPage navigateOnly={setActivePage} user={user} sortPreference={sortPreference} />;
       case 'calendar': return user ? <CalendarPage navigateOnly={setActivePage} user={user} sortPreference={sortPreference} /> : <Manual navigateOnly={setActivePage} pageName="Manual" user={user} sortPreference={sortPreference} />;
       case 'data': return user ? <DataPage navigateOnly={setActivePage} user={user} sortPreference={sortPreference} /> : <Manual navigateOnly={setActivePage} pageName="Manual" user={user} sortPreference={sortPreference} />;
-      case 'manage': return <Manage navigateOnly={setActivePage} />;
+      case 'manage': return user ? <Manage navigateOnly={setActivePage} /> : <Manual navigateOnly={setActivePage} pageName="Manual" user={user} sortPreference={sortPreference} />;
       default: return <Home navigateOnly={setActivePage} sortPreference={sortPreference} />;
     }
   };
@@ -232,6 +232,7 @@ const App = () => {
           user={user}
           isSettingsOpen={isSettingsOpen}
           mode={rightSidebarMode}
+          setActivePage={setActivePage}
         />
         <TopBar
           darkMode={darkMode}

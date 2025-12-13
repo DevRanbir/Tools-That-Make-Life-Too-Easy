@@ -1,9 +1,7 @@
-
-import React from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import { Search, X } from 'lucide-react';
 import MagneticMorphingNav from '../components/MagneticMorphingNav';
 import Masonry from '../components/Masonry';
-import { useRef, useState, useEffect } from 'react';
 import { gsap } from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
 import { supabase } from '../supabase';
@@ -19,7 +17,7 @@ const TagsPage = ({ navigateOnly, user, sortPreference }) => {
     // Tag State
     const [allTags, setAllTags] = useState([]);
     const [visibleTags, setVisibleTags] = useState([]); // Filtered by search
-    const [selectedTag, setSelectedTag] = useState(null);
+    const [selectedTags, setSelectedTags] = useState([]);
     const [tagSearchQuery, setTagSearchQuery] = useState('');
 
     const [totalTools, setTotalTools] = useState(0);
@@ -108,16 +106,16 @@ const TagsPage = ({ navigateOnly, user, sortPreference }) => {
         }
     }, [tagSearchQuery, allTags]);
 
-    // 3. Filter Products based on Selected Tag
+    // 3. Filter Products based on Selected Tags
     useEffect(() => {
-        if (!selectedTag) {
+        if (selectedTags.length === 0) {
             setDisplayedProducts([]); // Show nothing if no tag selected
         } else {
-            let filtered = products.filter(p => p.tags && p.tags.includes(selectedTag));
+            // OR Logic: Product must have at least one of the selected tags
+            let filtered = products.filter(p => p.tags && p.tags.some(t => selectedTags.includes(t)));
 
             // Apply Sort Preference
             let sorted = [...filtered];
-            // Reusing sort logic for consistency
             switch (sortPreference) {
                 case 'launch_recent': sorted.sort((a, b) => new Date(b.created_at) - new Date(a.created_at)); break;
                 case 'launch_old': sorted.sort((a, b) => new Date(a.created_at) - new Date(b.created_at)); break;
@@ -140,7 +138,16 @@ const TagsPage = ({ navigateOnly, user, sortPreference }) => {
             }
             setDisplayedProducts(sorted);
         }
-    }, [selectedTag, products, sortPreference]);
+    }, [selectedTags, products, sortPreference]);
+
+    const toggleTag = (tag) => {
+        setSelectedTags(prev => {
+            if (prev.includes(tag)) return prev.filter(t => t !== tag);
+            return [...prev, tag];
+        });
+    };
+
+    const clearAllTags = () => setSelectedTags([]);
 
     const handleBookmark = async (id) => {
         if (!user) {
@@ -150,21 +157,6 @@ const TagsPage = ({ navigateOnly, user, sortPreference }) => {
         const product = products.find(p => p.id === id);
         if (!product) return;
         const newStatus = !product.isBookmarked;
-
-        const updateList = (list) => list.map(p =>
-            p.id === id ? { ...p, isBookmarked: newStatus } : p
-        );
-
-        setProducts(updateList);
-        setDisplayedProducts(updateList); // Also update displayed list (NOTE: this might re-filter/sort if displayedProducts is derived, but here it's state)
-        // Actually displayedProducts is state, but we need to update 'products' (source) too?
-        // In the original code, `setDisplayedProducts` was updated but `products` should also be updated because filtering uses it?
-        // The original code only updated `products`. Wait, let check...
-        // Original code: setProducts(updateList); setDisplayedProducts(updateList);  <- Confirmed.
-        // Wait, updateList iterates 'list'. If current list is 'products', it updates that.
-        // We need to apply map to BOTH products and displayedProducts.
-        // Actually the passed 'list' param is confusing.
-        // Let's rewrite safely.
 
         const updateAll = products.map(p => p.id === id ? { ...p, isBookmarked: newStatus } : p);
         const updateDisplayed = displayedProducts.map(p => p.id === id ? { ...p, isBookmarked: newStatus } : p);
@@ -262,22 +254,37 @@ const TagsPage = ({ navigateOnly, user, sortPreference }) => {
                         </div>
                         <div className="hero-footer-text">#Select a tag to view tools</div>
 
-                        {/* 2. Chips Container */}
-                        <div className="filter-chip-container mt-4">
-                            {visibleTags.map(tag => (
+                    </div>
+                </div>
+
+                {/* Chips Container - Moved out of hero-section for full width */}
+                <div className="w-full max-w-[1400px] mx-auto px-6 pb-20" style={{ maxWidth: '100%', paddingLeft: '2rem', paddingRight: '2rem' }}>
+                    <div className="filter-chip-container mt-0" style={{ maxWidth: '100%' }}>
+                        {selectedTags.length > 1 && (
+                            <div
+                                className="filter-chip selected"
+                                onClick={clearAllTags}
+                                style={{ backgroundColor: 'var(--destructive)', color: 'white', borderColor: 'transparent' }}
+                            >
+                                Clear All <X size={14} />
+                            </div>
+                        )}
+                        {visibleTags.map(tag => {
+                            const isSelected = selectedTags.includes(tag);
+                            return (
                                 <div
                                     key={tag}
-                                    className={`filter-chip ${selectedTag === tag ? 'selected' : ''}`}
-                                    onClick={() => setSelectedTag(prev => prev === tag ? null : tag)}
+                                    className={`filter-chip ${isSelected ? 'selected' : ''}`}
+                                    onClick={() => toggleTag(tag)}
                                 >
                                     {tag}
-                                    {selectedTag === tag && <X size={14} />}
+                                    {isSelected && <X size={14} />}
                                 </div>
-                            ))}
-                            {visibleTags.length === 0 && (
-                                <div className="text-muted-foreground text-sm">No tags found</div>
-                            )}
-                        </div>
+                            );
+                        })}
+                        {visibleTags.length === 0 && (
+                            <div className="text-muted-foreground text-sm text-center w-full">No tags found</div>
+                        )}
                     </div>
                 </div>
             </div>
@@ -289,7 +296,7 @@ const TagsPage = ({ navigateOnly, user, sortPreference }) => {
                     style={{ margin: '0 auto', width: '100%', maxWidth: '100%', padding: '0 20px' }}
                 >
                     {/* 3. Grid (Only if tag selected) */}
-                    {selectedTag && (
+                    {selectedTags.length > 0 && (
                         <Masonry
                             items={displayedProducts}
                             ease="power3.out"
@@ -306,7 +313,7 @@ const TagsPage = ({ navigateOnly, user, sortPreference }) => {
                         />
                     )}
 
-                    {!selectedTag && (
+                    {selectedTags.length === 0 && (
                         <div className="flex flex-col items-center justify-center p-12 text-muted-foreground">
                             <Search size={48} strokeWidth={1} className="mb-4 opacity-50" />
                             <p>Select a tag above to explore tools</p>

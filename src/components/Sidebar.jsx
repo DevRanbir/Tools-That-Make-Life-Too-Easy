@@ -52,6 +52,7 @@ const Sidebar = ({ activePage, setActivePage, darkMode, setDarkMode, onAuthClick
             { id: 'home', icon: Heart, label: 'For You' },
             { id: 'data', icon: Database, label: 'Data' },
             { id: 'calendar', icon: CalendarIcon, label: 'Calendar' },
+            { id: 'manage', icon: Monitor, label: 'Manage' },
         ] : []),
         { id: 'shop', icon: ShoppingBag, label: 'Shop' },
     ];
