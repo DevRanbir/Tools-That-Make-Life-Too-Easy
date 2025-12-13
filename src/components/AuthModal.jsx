@@ -284,15 +284,15 @@ const AuthModal = ({ isOpen, onClose, startStep = 0, mode = 'default', user }) =
     if (!isOpen) return null;
 
     return (
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/80 backdrop-blur-md animate-in fade-in duration-300">
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-background/80 backdrop-blur-md animate-in fade-in duration-300">
             <div
-                className="w-full max-w-[380px] bg-[#050505] border border-zinc-800 rounded-3xl p-8 shadow-2xl relative overflow-hidden"
+                className="w-full max-w-[380px] bg-card border border-border rounded-3xl p-8 shadow-2xl relative overflow-hidden"
                 onClick={(e) => e.stopPropagation()}
                 style={{ maxHeight: '90vh', overflowY: 'auto' }}
             >
                 <button
                     onClick={onClose}
-                    className="absolute top-6 right-6 text-zinc-600 hover:text-zinc-200 transition-colors z-20"
+                    className="absolute top-6 right-6 text-muted-foreground hover:text-foreground transition-colors z-20"
                 >
                     <X size={20} />
                 </button>
@@ -309,13 +309,13 @@ const AuthModal = ({ isOpen, onClose, startStep = 0, mode = 'default', user }) =
                             className="flex flex-col"
                         >
                             <div className="mb-8 flex flex-col items-center text-center">
-                                <div className="w-12 h-12 bg-zinc-900/50 rounded-2xl flex items-center justify-center border border-zinc-800 mb-4 shadow-sm text-primary ring-1 ring-white/5">
+                                <div className="w-12 h-12 bg-secondary/50 rounded-2xl flex items-center justify-center border border-border mb-4 shadow-sm text-foreground ring-1 ring-white/5">
                                     <Sparkles size={20} fill="currentColor" className="opacity-80" />
                                 </div>
-                                <h2 className="text-xl font-bold text-white tracking-tight">
+                                <h2 className="text-xl font-bold text-foreground tracking-tight">
                                     {isSignUp ? 'Create your account' : 'Welcome back'}
                                 </h2>
-                                <p className="text-zinc-500 text-sm mt-2 font-medium">
+                                <p className="text-muted-foreground text-sm mt-2 font-medium">
                                     {isSignUp ? 'Start building your dream workspace.' : 'Enter your details to continue.'}
                                 </p>
                             </div>
@@ -323,13 +323,13 @@ const AuthModal = ({ isOpen, onClose, startStep = 0, mode = 'default', user }) =
                             <form onSubmit={handleAuth} className="space-y-4">
                                 <div className="space-y-1.5">
                                     <div className="relative group">
-                                        <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-500 group-focus-within:text-white transition-colors" size={16} />
+                                        <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground group-focus-within:text-foreground transition-colors" size={16} />
                                         <input
                                             type="email"
                                             required
                                             value={email}
                                             onChange={(e) => setEmail(e.target.value)}
-                                            className="w-full bg-[#0F0F0F] border border-zinc-800 rounded-xl py-3.5 pl-11 pr-4 text-white text-sm outline-none focus:border-zinc-700 focus:bg-[#141414] transition-all font-medium placeholder:text-zinc-600"
+                                            className="w-full bg-secondary/30 border border-input rounded-xl py-3.5 pl-11 pr-4 text-foreground text-sm outline-none focus:border-ring focus:bg-secondary/50 transition-all font-medium placeholder:text-muted-foreground"
                                             placeholder="Email address"
                                         />
                                     </div>
@@ -337,13 +337,13 @@ const AuthModal = ({ isOpen, onClose, startStep = 0, mode = 'default', user }) =
 
                                 <div className="space-y-1.5">
                                     <div className="relative group">
-                                        <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-500 group-focus-within:text-white transition-colors" size={16} />
+                                        <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground group-focus-within:text-foreground transition-colors" size={16} />
                                         <input
                                             type="password"
                                             required
                                             value={password}
                                             onChange={(e) => setPassword(e.target.value)}
-                                            className="w-full bg-[#0F0F0F] border border-zinc-800 rounded-xl py-3.5 pl-11 pr-4 text-white text-sm outline-none focus:border-zinc-700 focus:bg-[#141414] transition-all font-medium placeholder:text-zinc-600"
+                                            className="w-full bg-secondary/30 border border-input rounded-xl py-3.5 pl-11 pr-4 text-foreground text-sm outline-none focus:border-ring focus:bg-secondary/50 transition-all font-medium placeholder:text-muted-foreground"
                                             placeholder="Password"
                                         />
                                     </div>
@@ -358,7 +358,7 @@ const AuthModal = ({ isOpen, onClose, startStep = 0, mode = 'default', user }) =
                                 <button
                                     type="submit"
                                     disabled={loading}
-                                    className="w-full bg-white hover:bg-zinc-200 text-black font-bold py-3.5 rounded-xl transition-all flex items-center justify-center gap-2 mt-4 shadow-lg hover:shadow-xl hover:scale-[1.01] active:scale-[0.99]"
+                                    className="w-full bg-foreground hover:opacity-90 text-background font-bold py-3.5 rounded-xl transition-all flex items-center justify-center gap-2 mt-4 shadow-lg hover:shadow-xl hover:scale-[1.01] active:scale-[0.99]"
                                 >
                                     {loading ? 'Processing...' : (isSignUp ? 'Continue' : 'Sign In')}
                                     {!loading && <ArrowRight size={16} strokeWidth={2.5} />}
@@ -366,11 +366,11 @@ const AuthModal = ({ isOpen, onClose, startStep = 0, mode = 'default', user }) =
                             </form>
 
                             <div className="mt-8 text-center">
-                                <p className="text-zinc-500 text-xs font-medium">
+                                <p className="text-muted-foreground text-xs font-medium">
                                     {isSignUp ? "Already have an account?" : "Don't have an account?"}
                                     <button
                                         onClick={() => setIsSignUp(!isSignUp)}
-                                        className="text-white hover:text-zinc-300 ml-1.5 font-bold transition-colors inline-flex items-center gap-1 group"
+                                        className="text-foreground hover:text-muted-foreground ml-1.5 font-bold transition-colors inline-flex items-center gap-1 group"
                                     >
                                         {isSignUp ? "Log in" : "Sign up"}
                                     </button>
@@ -389,12 +389,12 @@ const AuthModal = ({ isOpen, onClose, startStep = 0, mode = 'default', user }) =
                             transition={{ duration: 0.2 }}
                             className="flex flex-col items-center text-center"
                         >
-                            <div className="w-16 h-16 bg-zinc-900 rounded-full flex items-center justify-center mb-6 ring-4 ring-zinc-900/50">
-                                <Mail size={32} className="text-white" />
+                            <div className="w-16 h-16 bg-secondary rounded-full flex items-center justify-center mb-6 ring-4 ring-secondary/50">
+                                <Mail size={32} className="text-foreground" />
                             </div>
-                            <h2 className="text-xl font-bold text-white mb-2">Check your email</h2>
-                            <p className="text-zinc-500 text-sm mb-8 leading-relaxed">
-                                We've sent a verification link to <span className="text-white font-medium">{email}</span>.<br />
+                            <h2 className="text-xl font-bold text-foreground mb-2">Check your email</h2>
+                            <p className="text-muted-foreground text-sm mb-8 leading-relaxed">
+                                We've sent a verification link to <span className="text-foreground font-medium">{email}</span>.<br />
                                 Please verify your email to continue setting up your account.
                             </p>
 
@@ -403,7 +403,7 @@ const AuthModal = ({ isOpen, onClose, startStep = 0, mode = 'default', user }) =
                                     setStep(0);
                                     setIsSignUp(false);
                                 }}
-                                className="w-full bg-white hover:bg-zinc-200 text-black font-bold py-3.5 rounded-xl transition-all"
+                                className="w-full bg-foreground hover:opacity-90 text-background font-bold py-3.5 rounded-xl transition-all"
                             >
                                 Back to Login
                             </button>
@@ -420,11 +420,11 @@ const AuthModal = ({ isOpen, onClose, startStep = 0, mode = 'default', user }) =
                             transition={{ duration: 0.2 }}
                             className="flex flex-col items-center"
                         >
-                            <h2 className="text-xl font-bold text-white mb-6">Setup Profile</h2>
+                            <h2 className="text-xl font-bold text-foreground mb-6">Setup Profile</h2>
 
                             {isCropping && originalImage ? (
                                 <div className="w-full flex flex-col items-center gap-4 animate-in fade-in zoom-in duration-200">
-                                    <div className="relative w-full h-64 bg-zinc-900/50 rounded-xl overflow-hidden border border-zinc-800">
+                                    <div className="relative w-full h-64 bg-secondary/50 rounded-xl overflow-hidden border border-border">
                                         <Cropper
                                             image={originalImage}
                                             className="h-full w-full"
@@ -437,13 +437,13 @@ const AuthModal = ({ isOpen, onClose, startStep = 0, mode = 'default', user }) =
                                     <div className="flex gap-3 w-full">
                                         <button
                                             onClick={() => { setIsCropping(false); setOriginalImage(null); }}
-                                            className="flex-1 py-2 rounded-lg bg-zinc-800 text-zinc-300 font-medium hover:bg-zinc-700 transition"
+                                            className="flex-1 py-2 rounded-lg bg-secondary text-primary font-medium hover:bg-secondary/80 transition"
                                         >
                                             Cancel
                                         </button>
                                         <button
                                             onClick={handleCropConfirm}
-                                            className="flex-1 py-2 rounded-lg bg-white text-black font-bold hover:bg-zinc-200 transition"
+                                            className="flex-1 py-2 rounded-lg bg-foreground text-background font-bold hover:opacity-90 transition"
                                         >
                                             Save Photo
                                         </button>
@@ -452,15 +452,15 @@ const AuthModal = ({ isOpen, onClose, startStep = 0, mode = 'default', user }) =
                             ) : (
                                 <>
                                     <div
-                                        className="w-24 h-24 bg-zinc-900 rounded-full flex items-center justify-center border-2 border-dashed border-zinc-800 hover:border-zinc-600 cursor-pointer transition-colors relative mb-6 group overflow-hidden"
+                                        className="w-24 h-24 bg-secondary rounded-full flex items-center justify-center border-2 border-dashed border-border hover:border-sidebar-primary cursor-pointer transition-colors relative mb-6 group overflow-hidden"
                                         onClick={() => fileInputRef.current?.click()}
                                     >
                                         {onboardingData.avatar ? (
                                             <img src={onboardingData.avatar} alt="Preview" className="w-full h-full object-cover" />
                                         ) : (
                                             <div className="flex flex-col items-center gap-1">
-                                                <Upload size={20} className="text-zinc-500 group-hover:text-zinc-300 transition-colors" />
-                                                <span className="text-[10px] text-zinc-600 font-medium">Upload</span>
+                                                <Upload size={20} className="text-muted-foreground group-hover:text-foreground transition-colors" />
+                                                <span className="text-[10px] text-muted-foreground font-medium">Upload</span>
                                             </div>
                                         )}
                                         <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
@@ -477,12 +477,12 @@ const AuthModal = ({ isOpen, onClose, startStep = 0, mode = 'default', user }) =
 
                                     {mode !== 'avatar_only' && (
                                         <div className="w-full space-y-1.5 mb-6">
-                                            <label className="text-[11px] font-bold text-zinc-500 uppercase tracking-wider ml-1">Username</label>
+                                            <label className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider ml-1">Username</label>
                                             <input
                                                 type="text"
                                                 value={onboardingData.username}
                                                 onChange={(e) => setOnboardingData({ ...onboardingData, username: e.target.value })}
-                                                className="w-full bg-[#0F0F0F] border border-zinc-800 rounded-xl py-3 px-4 text-white text-sm outline-none focus:border-zinc-700 transition-all font-medium placeholder:text-zinc-700"
+                                                className="w-full bg-secondary/30 border border-input rounded-xl py-3 px-4 text-foreground text-sm outline-none focus:border-ring transition-all font-medium placeholder:text-muted-foreground"
                                                 placeholder="@username"
                                                 autoFocus
                                             />
@@ -502,7 +502,7 @@ const AuthModal = ({ isOpen, onClose, startStep = 0, mode = 'default', user }) =
                                             }
                                         }}
                                         disabled={(!onboardingData.username && mode !== 'avatar_only') || loading}
-                                        className="w-full bg-white hover:bg-zinc-200 text-black font-bold py-3.5 rounded-xl transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                                        className="w-full bg-foreground hover:opacity-90 text-background font-bold py-3.5 rounded-xl transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                                     >
                                         {mode === 'avatar_only' ? 'Save Avatar' : 'Continue'} {(mode !== 'avatar_only') && <ArrowRight size={16} />}
                                     </button>
@@ -521,8 +521,8 @@ const AuthModal = ({ isOpen, onClose, startStep = 0, mode = 'default', user }) =
                             transition={{ duration: 0.2 }}
                             className="flex flex-col"
                         >
-                            <h2 className="text-xl font-bold text-white mb-2 text-center">What do you do?</h2>
-                            <p className="text-zinc-500 text-sm mb-6 text-center">This helps us customize your feed.</p>
+                            <h2 className="text-xl font-bold text-foreground mb-2 text-center">What do you do?</h2>
+                            <p className="text-muted-foreground text-sm mb-6 text-center">This helps us customize your feed.</p>
 
                             <div className="flex flex-col gap-3 mb-6">
                                 {['Student', 'Worker', 'Freelancer'].map((role) => (
@@ -530,21 +530,21 @@ const AuthModal = ({ isOpen, onClose, startStep = 0, mode = 'default', user }) =
                                         key={role}
                                         onClick={() => setOnboardingData({ ...onboardingData, occupation: role.toLowerCase() })}
                                         className={`p-4 rounded-xl border cursor-pointer transition-all flex items-center justify-between group ${onboardingData.occupation === role.toLowerCase()
-                                            ? 'bg-zinc-800/80 border-zinc-600 shadow-[0_0_15px_-3px_rgba(255,255,255,0.1)]'
-                                            : 'bg-[#0F0F0F] border-zinc-900/60 hover:border-zinc-800'
+                                            ? 'bg-secondary border-primary/50 shadow-[0_0_15px_-3px_rgba(255,255,255,0.1)]'
+                                            : 'bg-card border-border hover:border-ring/50'
                                             }`}
                                     >
                                         <div className="flex items-center gap-3">
-                                            <div className={`w-8 h-8 rounded-full flex items-center justify-center ${onboardingData.occupation === role.toLowerCase() ? 'bg-white text-black' : 'bg-zinc-900 text-zinc-600'}`}>
+                                            <div className={`w-8 h-8 rounded-full flex items-center justify-center ${onboardingData.occupation === role.toLowerCase() ? 'bg-foreground text-background' : 'bg-muted text-muted-foreground'}`}>
                                                 {role === 'Student' && <span className="text-xs font-bold">🎓</span>}
                                                 {role === 'Worker' && <span className="text-xs font-bold">💼</span>}
                                                 {role === 'Freelancer' && <span className="text-xs font-bold">🚀</span>}
                                             </div>
-                                            <span className={`font-medium transition-colors ${onboardingData.occupation === role.toLowerCase() ? 'text-white' : 'text-zinc-400 group-hover:text-zinc-300'}`}>{role}</span>
+                                            <span className={`font-medium transition-colors ${onboardingData.occupation === role.toLowerCase() ? 'text-foreground' : 'text-muted-foreground group-hover:text-foreground'}`}>{role}</span>
                                         </div>
                                         {onboardingData.occupation === role.toLowerCase() && (
-                                            <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} className="w-5 h-5 bg-white rounded-full flex items-center justify-center">
-                                                <Check size={12} className="text-black" strokeWidth={3} />
+                                            <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} className="w-5 h-5 bg-foreground rounded-full flex items-center justify-center">
+                                                <Check size={12} className="text-background" strokeWidth={3} />
                                             </motion.div>
                                         )}
                                     </div>
@@ -553,7 +553,7 @@ const AuthModal = ({ isOpen, onClose, startStep = 0, mode = 'default', user }) =
 
                             <button
                                 onClick={() => setStep(3)}
-                                className="w-full bg-white hover:bg-zinc-200 text-black font-bold py-3.5 rounded-xl transition-all flex items-center justify-center gap-2"
+                                className="w-full bg-foreground hover:opacity-90 text-background font-bold py-3.5 rounded-xl transition-all flex items-center justify-center gap-2"
                             >
                                 Continue <ArrowRight size={16} />
                             </button>
@@ -570,8 +570,8 @@ const AuthModal = ({ isOpen, onClose, startStep = 0, mode = 'default', user }) =
                             transition={{ duration: 0.2 }}
                             className="flex flex-col"
                         >
-                            <h2 className="text-xl font-bold text-white mb-2 text-center">Sorting Preference</h2>
-                            <p className="text-zinc-500 text-sm mb-6 text-center">How do you prefer to see tools sorted?</p>
+                            <h2 className="text-xl font-bold text-foreground mb-2 text-center">Sorting Preference</h2>
+                            <p className="text-muted-foreground text-sm mb-6 text-center">How do you prefer to see tools sorted?</p>
 
                             <div className="grid grid-cols-1 gap-3 mb-8">
                                 {[
@@ -583,21 +583,21 @@ const AuthModal = ({ isOpen, onClose, startStep = 0, mode = 'default', user }) =
                                         key={pref.id}
                                         onClick={() => setOnboardingData({ ...onboardingData, preference: pref.id })}
                                         className={`relative overflow-hidden p-4 rounded-xl border cursor-pointer transition-all flex items-center justify-between group ${onboardingData.preference === pref.id
-                                            ? 'bg-zinc-800/80 border-zinc-600 shadow-[0_0_15px_-3px_rgba(255,255,255,0.1)]'
-                                            : 'bg-[#0F0F0F] border-zinc-900/60 hover:border-zinc-800'
+                                            ? 'bg-secondary border-primary/50 shadow-[0_0_15px_-3px_rgba(255,255,255,0.1)]'
+                                            : 'bg-card border-border hover:border-ring/50'
                                             }`}
                                     >
                                         <div className="flex flex-col gap-1 z-10">
-                                            <span className={`text-sm font-bold ${onboardingData.preference === pref.id ? 'text-white' : 'text-zinc-300'}`}>
+                                            <span className={`text-sm font-bold ${onboardingData.preference === pref.id ? 'text-foreground' : 'text-muted-foreground'}`}>
                                                 {pref.label}
                                             </span>
-                                            <span className={`text-xs font-medium ${onboardingData.preference === pref.id ? 'text-zinc-300' : 'text-zinc-500'}`}>
+                                            <span className={`text-xs font-medium ${onboardingData.preference === pref.id ? 'text-muted-foreground' : 'text-muted-foreground/80'}`}>
                                                 {pref.desc}
                                             </span>
                                         </div>
                                         {onboardingData.preference === pref.id && (
-                                            <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} className="z-10 bg-white rounded-full p-1">
-                                                <Check size={12} className="text-black" strokeWidth={3} />
+                                            <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} className="z-10 bg-foreground rounded-full p-1">
+                                                <Check size={12} className="text-background" strokeWidth={3} />
                                             </motion.div>
                                         )}
                                     </div>
@@ -613,7 +613,7 @@ const AuthModal = ({ isOpen, onClose, startStep = 0, mode = 'default', user }) =
                             <button
                                 onClick={handleOnboardingSubmit}
                                 disabled={loading}
-                                className="w-full bg-white hover:bg-zinc-200 text-black font-bold py-3.5 rounded-xl transition-all flex items-center justify-center gap-2 shadow-lg hover:shadow-xl hover:scale-[1.01] active:scale-[0.99]"
+                                className="w-full bg-foreground hover:opacity-90 text-background font-bold py-3.5 rounded-xl transition-all flex items-center justify-center gap-2 shadow-lg hover:shadow-xl hover:scale-[1.01] active:scale-[0.99]"
                             >
                                 {loading ? 'Saving...' : 'Finish Setup'}
                             </button>

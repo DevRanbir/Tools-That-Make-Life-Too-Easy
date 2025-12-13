@@ -46,17 +46,32 @@ const Sidebar = ({
     // Swipe to show sidebar on mobile
     useEffect(() => {
         let touchStartX = 0;
-        let touchEndX = 0;
+        let touchStartY = 0;
 
         const handleTouchStart = (e) => {
             touchStartX = e.changedTouches[0].screenX;
+            touchStartY = e.changedTouches[0].screenY;
         };
 
         const handleTouchEnd = (e) => {
-            touchEndX = e.changedTouches[0].screenX;
-            if (touchEndX > touchStartX + 50 && touchStartX < 50) {
-                // Swipe Right near left edge
-                setIsMobileHidden(false);
+            const touchEndX = e.changedTouches[0].screenX;
+            const touchEndY = e.changedTouches[0].screenY;
+            
+            const deltaX = touchEndX - touchStartX;
+            const deltaY = touchEndY - touchStartY;
+            
+            // Check if horizontal swipe is dominant (to avoid blocking vertical scroll)
+            if (Math.abs(deltaX) > Math.abs(deltaY)) {
+                // Swipe threshold
+                if (Math.abs(deltaX) > 50) {
+                    if (deltaX > 0) {
+                        // Swipe Right -> Open Sidebar (Show)
+                        setIsMobileHidden(false);
+                    } else {
+                        // Swipe Left -> Close Sidebar (Hide)
+                        setIsMobileHidden(true);
+                    }
+                }
             }
         };
 

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import LoadingScreen from './components/LoadingScreen';
 import Sidebar from './components/Sidebar';
 import RightSidebar from './components/RightSidebar';
 import TopBar from './components/TopBar';
@@ -19,11 +20,42 @@ import { supabase } from './supabase';
 import { Toaster, toast } from 'sonner';
 
 const App = () => {
+  const [loadingState, setLoadingState] = useState('active'); // 'active' | 'fading' | 'off'
+  const [loadingScope, setLoadingScope] = useState('global'); // 'local' | 'global'
+
+  // Initial loading effect
+  const timerRef = React.useRef(null);
+
+  const clearTimers = () => {
+    if (timerRef.current) {
+      clearTimeout(timerRef.current);
+      timerRef.current = null;
+    }
+  };
+
+  // Initial loading effect
+  useEffect(() => {
+    // Start fading after 2500ms
+    timerRef.current = setTimeout(() => {
+      setLoadingState('fading');
+
+      // Turn off completely after fade out (approx 700ms transition)
+      timerRef.current = setTimeout(() => {
+        setLoadingState('off');
+      }, 700);
+    }, 2500);
+
+    return () => clearTimers();
+  }, []);
+
   const [darkMode, setDarkMode] = useState(() => {
     const saved = localStorage.getItem('theme');
     // Default to true (dark) if nothing saved
     return saved !== null ? JSON.parse(saved) : true;
   });
+  // Keep track of the theme displayed by the loader specifically
+  const [loaderTheme, setLoaderTheme] = useState(darkMode);
+
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
 
   useEffect(() => {
@@ -54,6 +86,73 @@ const App = () => {
     { id: 1, role: 'ai', content: "Hello! I'm your AI assistant. I'm currently in beta mode, but feel free to ask me anything about the tools available here!" }
   ]);
   // activePage determines which page component to render
+
+  const handlePageChange = (newPage) => {
+    if (newPage === activePage) return;
+
+    const isInstantTransition = (activePage === 'manual' && newPage === 'fastmode');
+
+    if (isInstantTransition) {
+      setActivePage(newPage);
+      return;
+    }
+    
+    // Clear any existing timers to prevent glitches
+    clearTimers();
+
+    setLoadingScope('local');
+    setLoaderTheme(darkMode); // Sync to current theme BEFORE showing loader
+    // 1. Show loader
+    setLoadingState('active'); 
+    
+    // 2. Wait for fade/transition, then switch page
+    timerRef.current = setTimeout(() => {
+      setActivePage(newPage);
+      
+      // 3. Keep loader for a moment then fade out
+      timerRef.current = setTimeout(() => {
+        setLoadingState('fading');
+        
+        // 4. Turn off
+        timerRef.current = setTimeout(() => {
+          setLoadingState('off');
+        }, 700);
+      }, 800); // Wait bit longer for content to render
+    }, 300); // 300ms fade in buffer
+  };
+
+  const updateTheme = (newModeOrFn) => {
+    // 1. Lock the loader to the CURRENT theme before we switch
+    setLoaderTheme(darkMode);
+    setLoadingScope('global'); // Show globally
+    clearTimers();
+    setLoadingState('active');
+
+    // 2. Wait for loader to fully appear (cover the screen), then switch the APP theme
+    timerRef.current = setTimeout(() => {
+      setDarkMode(prev => {
+        const next = typeof newModeOrFn === 'function' ? newModeOrFn(prev) : newModeOrFn;
+        // NOTE: We do NOT update loaderTheme here. It stays on the OLD theme.
+        return next;
+      });
+
+      // 3. Wait a bit (app is now new theme, loader is still old theme)
+      //    User sees: Old Theme Loader -> Fades out to reveal New Theme App
+      timerRef.current = setTimeout(() => {
+        setLoadingState('fading');
+
+        // 4. Cleanup after animation ends
+        timerRef.current = setTimeout(() => {
+          setLoadingState('off');
+          // Now we can sync loader theme for next time (optional, but good practice)
+          // We need to know the 'next' value here to set it correctly.
+          // Since setDarkMode is async/batched, simpler to just let it be or use effect.
+          // Actually, we can just sync it to 'darkMode' state in an effect or here if we knew the value.
+          // Let's rely on the next call to updateTheme to reset it to 'darkMode'.
+        }, 700);
+      }, 1500);
+    }, 400);
+  };
 
   const [authStartStep, setAuthStartStep] = useState(0);
 
@@ -226,12 +325,12 @@ const App = () => {
 
   const renderContent = () => {
     switch (activePage) {
-      case 'home': return <Manual navigateOnly={setActivePage} pageName="For You" user={user} sortPreference={sortPreference} />;
-      case 'fastmode': return <FastMode navigateOnly={setActivePage} user={user} messages={chatMessages} setMessages={setChatMessages} />;
-      case 'manual': return <Manual navigateOnly={setActivePage} pageName="Manual" user={user} sortPreference={sortPreference} />;
-      case 'search': return <SearchPage navigateOnly={setActivePage} user={user} sortPreference={sortPreference} />;
+      case 'home': return <Manual navigateOnly={handlePageChange} pageName="For You" user={user} sortPreference={sortPreference} />;
+      case 'fastmode': return <FastMode navigateOnly={handlePageChange} user={user} messages={chatMessages} setMessages={setChatMessages} />;
+      case 'manual': return <Manual navigateOnly={handlePageChange} pageName="Manual" user={user} sortPreference={sortPreference} />;
+      case 'search': return <SearchPage navigateOnly={handlePageChange} user={user} sortPreference={sortPreference} />;
       case 'todos': return <TodosPage
-        navigateOnly={setActivePage}
+        navigateOnly={handlePageChange}
         user={user}
         todos={todos}
         toggleTodo={toggleTodo}
@@ -245,12 +344,12 @@ const App = () => {
         editTodo={editTodo}
         editSubtask={editSubtask}
       />;
-      case 'tags': return <TagsPage navigateOnly={setActivePage} user={user} sortPreference={sortPreference} />;
-      case 'shop': return <ShopPage navigateOnly={setActivePage} user={user} sortPreference={sortPreference} />;
-      case 'calendar': return user ? <CalendarPage navigateOnly={setActivePage} user={user} sortPreference={sortPreference} /> : <Manual navigateOnly={setActivePage} pageName="Manual" user={user} sortPreference={sortPreference} />;
-      case 'data': return user ? <DataPage navigateOnly={setActivePage} user={user} sortPreference={sortPreference} /> : <Manual navigateOnly={setActivePage} pageName="Manual" user={user} sortPreference={sortPreference} />;
-      case 'manage': return (user && user.user_metadata?.role === 'administrator') ? <Manage navigateOnly={setActivePage} /> : <Manual navigateOnly={setActivePage} pageName="Manual" user={user} sortPreference={sortPreference} />;
-      default: return <Home navigateOnly={setActivePage} sortPreference={sortPreference} />;
+      case 'tags': return <TagsPage navigateOnly={handlePageChange} user={user} sortPreference={sortPreference} />;
+      case 'shop': return <ShopPage navigateOnly={handlePageChange} user={user} sortPreference={sortPreference} />;
+      case 'calendar': return user ? <CalendarPage navigateOnly={handlePageChange} user={user} sortPreference={sortPreference} /> : <Manual navigateOnly={handlePageChange} pageName="Manual" user={user} sortPreference={sortPreference} />;
+      case 'data': return user ? <DataPage navigateOnly={handlePageChange} user={user} sortPreference={sortPreference} /> : <Manual navigateOnly={handlePageChange} pageName="Manual" user={user} sortPreference={sortPreference} />;
+      case 'manage': return (user && user.user_metadata?.role === 'administrator') ? <Manage navigateOnly={handlePageChange} /> : <Manual navigateOnly={handlePageChange} pageName="Manual" user={user} sortPreference={sortPreference} />;
+      default: return <Home navigateOnly={handlePageChange} sortPreference={sortPreference} />;
     }
   };
 
@@ -530,14 +629,17 @@ const App = () => {
 
   // ...
 
+  // Removed simple early return. Logic moved to overlay below.
+
+
   return (
     <div className="layout">
       <div className="main-body">
         <Sidebar
           activePage={activePage}
-          setActivePage={setActivePage}
+          setActivePage={handlePageChange}
           darkMode={darkMode}
-          setDarkMode={setDarkMode}
+          setDarkMode={updateTheme}
           onAuthClick={handleAuthClick}
           user={user}
           isSettingsOpen={isSettingsOpen}
@@ -551,16 +653,16 @@ const App = () => {
           user={user}
           isSettingsOpen={isSettingsOpen}
           mode={rightSidebarMode}
-          setActivePage={setActivePage}
+          setActivePage={handlePageChange}
           todos={todos}
           completeNextSubtask={completeNextSubtask}
         />
         <TopBar
           darkMode={darkMode}
-          setDarkMode={setDarkMode}
+          setDarkMode={updateTheme}
           onAuthClick={handleAuthClick}
           user={user}
-          navigateOnly={setActivePage}
+          navigateOnly={handlePageChange}
           sortPreference={sortPreference}
           onSortChange={updateSortPreference}
           openSettings={openSettings}
@@ -568,6 +670,13 @@ const App = () => {
         />
         <div className="content-area">
           {renderContent()}
+          {loadingState !== 'off' && (
+            <LoadingScreen
+              darkMode={loaderTheme}
+              fadeOut={loadingState === 'fading'}
+              isGlobal={loadingScope === 'global'}
+            />
+          )}
         </div>
       </div>
       <AuthModal
@@ -578,6 +687,7 @@ const App = () => {
         user={user}
       />
       <Toaster />
+
     </div>
   );
 };

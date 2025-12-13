@@ -34,7 +34,7 @@ const TopBar = ({ darkMode, setDarkMode, onAuthClick, user, navigateOnly, sortPr
             return (
                 <button className="start-now-btn" onClick={onAuthClick}>
                     <Sparkles size={16} fill="currentColor" />
-                    <span>Start now</span>
+                    <span>{isMobile ? "Login" : "Start now"}</span>
                 </button>
             );
         }
