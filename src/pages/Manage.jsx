@@ -337,8 +337,7 @@ const Manage = ({ navigateOnly }) => {
                     
                     if (storageError) {
                         console.warn("Could not delete image from storage:", storageError);
-                        // We continue to delete the record even if image delete fails, 
-                        // but logging it is good.
+
                     }
                 }
             }
@@ -378,17 +377,6 @@ const Manage = ({ navigateOnly }) => {
                     <p className="hero-subtitle">
                         Add, edit, or delete items from your collection.
                     </p>
-
-                    {/* Reuse Hero Search Layout for Aesthetics */}
-                    <div className="hero-search-wrapper" style={{ opacity: 0.8, pointerEvents: 'none' }}>
-                        {/* Visual only in Manage page usually, but we keep it for "Match Home" request */}
-                        <div className="big-search-bar">
-                            <div className="flex items-center gap-2 w-full text-zinc-500">
-                                <Settings size={18} />
-                                <span>Dashboard Control Center</span>
-                            </div>
-                        </div>
-                    </div>
                 </div>
             </div>
 

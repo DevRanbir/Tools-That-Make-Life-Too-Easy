@@ -16,20 +16,43 @@ const Home = ({ navigateOnly, sortPreference }) => {
     const gridRef = useRef(null);
     const [products, setProducts] = useState([]); // Default to empty array
 
-    /* 
-    // Products fetching removed as per request to show cards only on Manual tab
+    const [searchQuery, setSearchQuery] = useState('');
+    const [filteredSuggestions, setFilteredSuggestions] = useState([]);
+    const [showDropdown, setShowDropdown] = useState(false);
+
     useEffect(() => {
         const fetchProducts = async () => {
-             // ... fetching logic ...
+            const { data, error } = await supabase
+                .from('products')
+                .select('title, name, description') // minimal fetch for search
+                .order('views', { ascending: false }); // Show popular stuff first?
+
+            if (!error && data) {
+                setProducts(data);
+            }
         };
         fetchProducts();
-        // ... subscription ...
     }, []);
-    */
+
+    useEffect(() => {
+        if (!searchQuery.trim()) {
+            setFilteredSuggestions([]);
+            return;
+        }
+
+        const lowerQ = searchQuery.toLowerCase();
+        const matches = products.filter(p =>
+            (p.title && p.title.toLowerCase().includes(lowerQ)) ||
+            (p.name && p.name.toLowerCase().includes(lowerQ))
+        ).slice(0, 5); // Limit to 5 suggestions
+
+        setFilteredSuggestions(matches);
+    }, [searchQuery, products]);
 
     return (
         <div className="home-page">
-            <div className="hero-sticky-wrapper">
+            {/* Dynamic Z-index to ensure dropdown shows over content */}
+            <div className={`hero-sticky-wrapper ${showDropdown ? '!z-[100]' : ''}`}>
                 <div className="hero-section">
                     <h1 className="hero-title">
                         Tools That Make Life <br /> Too Easy
@@ -39,34 +62,67 @@ const Home = ({ navigateOnly, sortPreference }) => {
                     </p>
 
                     <div className="hero-search-wrapper">
-                        <div className="big-search-bar">
-                            <input 
-                                type="text" 
-                                placeholder="Search..." 
+                        <div className="big-search-bar relative">
+                            <input
+                                type="text"
+                                placeholder="Search..."
+                                value={searchQuery}
+                                onChange={(e) => {
+                                    setSearchQuery(e.target.value);
+                                    setShowDropdown(true);
+                                }}
+                                onFocus={() => setShowDropdown(true)}
+                                onBlur={() => setTimeout(() => setShowDropdown(false), 200)}
                                 onKeyDown={(e) => {
-                                    if (e.key === 'Enter' && e.target.value.trim()) {
+                                    if (e.key === 'Enter' && searchQuery.trim()) {
                                         navigateOnly('search');
-                                        // Small timeout to allow state change then update hash
                                         setTimeout(() => {
-                                            window.location.hash = encodeURIComponent(e.target.value.trim());
+                                            window.location.hash = encodeURIComponent(searchQuery.trim());
                                         }, 0);
+                                        setShowDropdown(false);
                                     }
                                 }}
                             />
+                            {/* Search Dropdown */}
+                            {showDropdown && searchQuery && filteredSuggestions.length !== 0 && (
+                                <div className="absolute top-full left-0 right-0 mt-4 bg-zinc-950 border border-zinc-800 rounded-2xl shadow-2xl z-[100] overflow-hidden text-left animate-in fade-in slide-in-from-top-2 duration-200">
+                                    {filteredSuggestions.map((item, idx) => (
+                                        <div
+                                            key={idx}
+                                            className="px-5 py-4 hover:bg-white/5 cursor-pointer flex items-center gap-3 transition-colors group border-b border-white/5 last:border-0"
+                                            onClick={() => {
+                                                const term = item.title || item.name;
+                                                setSearchQuery(term);
+                                                navigateOnly('search');
+                                                setTimeout(() => {
+                                                    window.location.hash = encodeURIComponent(term);
+                                                }, 0);
+                                            }}
+                                        >
+                                            <Search size={16} className="text-zinc-500 group-hover:text-white transition-colors" />
+                                            <span className="text-base font-medium text-zinc-300 group-hover:text-white transition-colors truncate">
+                                                {item.title || item.name}
+                                            </span>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
                             <div className="search-actions">
                                 <span className="kbd">CTRL + K</span>
-                                <button 
+                                <button
                                     className="search-btn"
                                     onClick={(e) => {
-                                       const input = e.currentTarget.parentElement.previousElementSibling;
-                                       if (input && input.value.trim()) {
+                                        const input = e.currentTarget.parentElement.previousElementSibling;
+                                        if (input && input.value.trim()) {
                                             navigateOnly('search');
                                             setTimeout(() => {
                                                 window.location.hash = encodeURIComponent(input.value.trim());
                                             }, 0);
-                                       }
+                                        }
                                     }}
-                                ><Search size={18} /></button>
+                                >
+                                    <Search size={18} />
+                                </button>
                             </div>
                         </div>
                         <div className="hero-footer-text">#1 website for AI tools. Used by 70M+ humans.</div>

@@ -7,8 +7,9 @@ const CalendarPage = ({ navigateOnly, user }) => {
     const [eventCounts, setEventCounts] = React.useState({ ongoing: 0, upcoming: 0 });
     const navTabs = [
         { id: 'home', label: 'For you', icon: <ChevronDown size={14} fill="currentColor" /> },
-        { id: 'data', label: 'Data' },
-        { id: 'calendar', label: 'Calendar' }
+        { id: 'todos', label: 'Todo' },
+        { id: 'calendar', label: 'Calendar' },
+        { id: 'data', label: 'Data' }
     ];
 
     return (

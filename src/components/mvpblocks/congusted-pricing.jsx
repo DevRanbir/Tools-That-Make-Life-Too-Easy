@@ -133,7 +133,7 @@ export default function CongustedPricing({
             </Label>
           </label>
           <span className="ml-2 font-semibold">
-            Annual billing <span className="text-primary">(Save 20%)</span>
+            Annual billing <span className="text-primary">(Save 5%)</span>
           </span>
         </div>
       )}
@@ -187,23 +187,27 @@ export default function CongustedPricing({
               </p>
               <div className="mt-6 flex items-center justify-center gap-x-2">
                 <span className="text-foreground text-5xl font-bold tracking-tight">
-                  <NumberFlow
-                    value={
-                      isMonthly ? Number(plan.price) : Number(plan.yearlyPrice)
-                    }
-                    format={{
-                      style: "currency",
-                      currency: "USD",
-                      minimumFractionDigits: 0,
-                      maximumFractionDigits: 0,
-                    }}
-                    transformTiming={{
-                      duration: 500,
-                      easing: "ease-out",
-                    }}
-                    willChange
-                    className="font-variant-numeric: tabular-nums"
-                  />
+                  {!isNaN(Number(isMonthly ? plan.price : plan.yearlyPrice)) ? (
+                    <NumberFlow
+                      value={
+                        isMonthly ? Number(plan.price) : Number(plan.yearlyPrice)
+                      }
+                      format={{
+                        style: "currency",
+                        currency: plan.currency || "USD",
+                        minimumFractionDigits: 0,
+                        maximumFractionDigits: 0,
+                      }}
+                      transformTiming={{
+                        duration: 500,
+                        easing: "ease-out",
+                      }}
+                      willChange
+                      className="font-variant-numeric: tabular-nums"
+                    />
+                  ) : (
+                    <span>{isMonthly ? plan.price : plan.yearlyPrice}</span>
+                  )}
                 </span>
                 {plan.period !== "Next 3 months" && (
                   <span className="text-muted-foreground text-sm leading-6 font-semibold tracking-wide">
@@ -228,6 +232,7 @@ export default function CongustedPricing({
               <hr className="my-4 w-full border-border" />
 
               <button
+                disabled={plan.disabled}
                 onClick={() => onPlanSelect && onPlanSelect(plan)}
                 className={cn(
                   buttonVariants({
@@ -238,6 +243,7 @@ export default function CongustedPricing({
                   plan.isPopular
                     ? "!bg-primary !text-white hover:!bg-primary/90"
                     : "!bg-black !text-white hover:!bg-gray-800 dark:!bg-white dark:!text-black dark:hover:!bg-gray-200",
+                  plan.disabled && "opacity-50 cursor-not-allowed hover:ring-0"
                 )}>
                 {plan.buttonText}
               </button>

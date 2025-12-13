@@ -441,7 +441,7 @@ input:checked+.slider:before {
 
 .start-now-btn:hover {
   background-color: var(--secondary);
-  transform: translateY(2px);
+  transform: translateY(-2px);
 }
 
 
@@ -790,6 +790,7 @@ input:checked+.slider:before {
   gap: 1rem;
   position: relative;
   margin-bottom: 2rem;
+  z-index: 50;
 }
 
 .gen-rank-pill {
@@ -875,6 +876,8 @@ input:checked+.slider:before {
   align-items: center;
   justify-content: space-between;
   box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+  position: relative;
+  z-index: 50;
 }
 
 .big-search-bar input {
@@ -984,4 +987,61 @@ input:checked+.slider:before {
   scrollbar-track-color: transparent;
 
 
+}
+@media (max-width: 768px) {
+  .right-sidebar {
+    display: none !important;
+  }
+  .content-area {
+    padding-left: 0px;
+    padding-right: 0px;
+  }
+
+  /* Mobile TopBar Styling */
+  .topbar {
+    height: auto;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+
+  .topbar-left {
+    display: none;
+  }
+
+  .topbar-right {
+    width: 100%;
+    justify-content: flex-end;
+  }
+
+  .topbar-center {
+    position: static;
+    transform: none;
+    width: 100%;
+    overflow-x: auto;
+    justify-content: flex-start;
+    padding-bottom: 5px;
+    /* Hide scrollbar */
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  
+  .topbar-center::-webkit-scrollbar {
+    display: none;
+  }
+  
+  .tabs {
+     width: max-content;
+  }
+
+  .kbd {
+    display: none;
+  }
+  .search-bar-merged{
+    width: 50px !important;
+    min-width: 20px;
+    max-width: 100%;
+  }
+  .sidebar{
+    top: 53.5%;
+  }
 }

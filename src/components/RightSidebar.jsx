@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Bookmark, Settings } from 'lucide-react';
 import { supabase } from '../supabase';
 
-const RightSidebar = ({ user, isSettingsOpen, mode = 'full', setActivePage }) => {
+const RightSidebar = ({ user, isSettingsOpen, mode = 'full', setActivePage, todos = [], completeNextSubtask }) => {
     const [isExpanded, setIsExpanded] = useState(false);
     const [bookmarks, setBookmarks] = useState([]);
 
@@ -189,7 +189,7 @@ const RightSidebar = ({ user, isSettingsOpen, mode = 'full', setActivePage }) =>
         minHeight: 'fit-content',
         position: 'fixed',
         right: 0,
-        top: '40%',
+        top: '50%',
         transform: isVisible ? 'translate(0, -50%)' : 'translate(150%, -50%)', // Slide in/out
         border: '1px solid var(--border)',
         borderRight: 'none',
@@ -211,6 +211,7 @@ const RightSidebar = ({ user, isSettingsOpen, mode = 'full', setActivePage }) =>
 
     return (
         <div
+            className="right-sidebar"
             style={sidebarStyle}
             onMouseEnter={handleMouseEnter}
             onMouseLeave={handleMouseLeave}
@@ -239,6 +240,57 @@ const RightSidebar = ({ user, isSettingsOpen, mode = 'full', setActivePage }) =>
                                 <Settings size={20} />
                             </div>
                         </div>
+                    </div>
+                </>
+            )}
+
+            {/* TODOS SECTION */}
+            {user && (mode === 'full') && todos.filter(t => t.pinned && !t.completed && (!t.subtasks || t.subtasks.length === 0 || t.subtasks.some(st => !st.completed))).length > 0 && (
+                <>
+                    <div className={`w-full flex flex-col mb-[2px] transition-all duration-300 items-end pr-[10px] ${isExpanded ? 'pl-[20px]' : ''}`}>
+                        <span className={`text-[10px] font-bold tracking-wider text-right transition-opacity duration-300 ${isExpanded ? 'opacity-100' : 'opacity-60'}`}>
+                            TODOS
+                        </span>
+                    </div>
+
+                    <div className="flex flex-col gap-[2px] w-full mb-4">
+                        {todos
+                            .filter(t => t.pinned && !t.completed && (!t.subtasks || t.subtasks.length === 0 || t.subtasks.some(st => !st.completed)))
+                            .map(todo => {
+                                const completedCount = todo.subtasks ? todo.subtasks.filter(st => st.completed).length : 0;
+                                const totalCount = todo.subtasks ? todo.subtasks.length : 0;
+                                const currentSubtask = todo.subtasks ? todo.subtasks.find(st => !st.completed) : null;
+                                const subtitle = currentSubtask ? currentSubtask.text : (totalCount === 0 ? 'No subtasks' : 'All done');
+
+                                return (
+                                    <div
+                                        key={todo.id}
+                                        className={`group w-full h-[48px] flex items-center justify-end pr-[10px] ${isExpanded ? 'pl-[20px]' : ''} text-muted-foreground cursor-pointer relative transition-all duration-200 hover:text-foreground hover:opacity-100 opacity-60`}
+                                        onClick={() => setActivePage('todos')}
+                                    >
+                                        <div className={`flex flex-col items-end justify-end mr-3 transition-all duration-300 ease-in-out ${isExpanded ? 'opacity-100 max-w-[200px] pointer-events-auto' : 'opacity-0 max-w-0 pointer-events-none'}`}>
+                                            <span className="text-sm font-medium whitespace-nowrap overflow-hidden">
+                                                {todo.text}
+                                            </span>
+                                            <span className="text-[9px] text-muted-foreground uppercase tracking-wider truncate max-w-[120px]">
+                                                {subtitle}
+                                            </span>
+                                        </div>
+
+                                        <div
+                                            className="min-w-[40px] w-[40px] h-[40px] flex items-center justify-center rounded-xl overflow-hidden bg-background border border-border group-hover:scale-105 transition-transform duration-200 shadow-sm hover:bg-secondary/50"
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                if (completeNextSubtask) completeNextSubtask(todo.id);
+                                            }}
+                                        >
+                                            <span className="text-[10px] font-bold text-muted-foreground select-none">
+                                                {completedCount}/{totalCount}
+                                            </span>
+                                        </div>
+                                    </div>
+                                );
+                            })}
                     </div>
                 </>
             )}

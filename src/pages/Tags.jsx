@@ -235,7 +235,7 @@ const TagsPage = ({ navigateOnly, user, sortPreference }) => {
                         Tools That Make Life <br /> Too Easy
                     </h1>
                     <p className="hero-subtitle">
-                        {totalTools.toLocaleString()} <span className="text-destructive font-bold">AI tools ready to be searched</span>
+                        {allTags.length.toLocaleString()} <span className="text-destructive font-bold">Tags ready to be searched</span>
                     </p>
 
                     <div className="hero-search-wrapper">

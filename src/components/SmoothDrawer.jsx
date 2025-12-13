@@ -3,8 +3,8 @@ import { Drawer } from 'vaul';
 import { Settings, X, Moon, Sun, User, LogOut, Database, CreditCard, Layout, Eye, EyeOff, FileText, Image as ImageIcon, Folder, File } from 'lucide-react';
 import { supabase } from '../supabase';
 
-const SmoothDrawer = ({ trigger, user, onAuthClick, darkMode, setDarkMode, open, onOpenChange, rightSidebarMode, setRightSidebarMode, setActivePage }) => {
-    const [activeTab, setActiveTab] = useState('preferences');
+const SmoothDrawer = ({ trigger, user, onAuthClick, darkMode, setDarkMode, open, onOpenChange, rightSidebarMode, setRightSidebarMode, setActivePage, activeTab = 'preferences', onTabChange }) => {
+    // Controlled state: use activeTab and onTabChange from props
 
     // Account State
     const [username, setUsername] = useState(user?.user_metadata?.username || '');
@@ -71,9 +71,13 @@ const SmoothDrawer = ({ trigger, user, onAuthClick, darkMode, setDarkMode, open,
     };
 
     useEffect(() => {
-        if (activeTab === 'data' && user) {
-            fetchStorageData();
-            fetchUserDetails();
+        if (user) {
+            if (activeTab === 'data') {
+                fetchStorageData();
+                fetchUserDetails();
+            } else if (activeTab === 'account') {
+                fetchUserDetails();
+            }
         }
     }, [activeTab, user]);
 
@@ -193,8 +197,9 @@ const SmoothDrawer = ({ trigger, user, onAuthClick, darkMode, setDarkMode, open,
                 {trigger}
             </Drawer.Trigger>
             <Drawer.Portal>
-                <Drawer.Overlay className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50" />
-                <Drawer.Content className="bg-background/95 backdrop-blur-3xl flex flex-col rounded-t-[20px] h-[85vh] mt-24 fixed bottom-0 inset-x-0 mx-auto w-full max-w-2xl z-50 border-t border-white/10 outline-none shadow-[0_-10px_40px_-15px_rgba(0,0,0,0.5)]">
+                <Drawer.Overlay className="fixed inset-0 bg-black/40 backdrop-blur-sm z-[200]" />
+                <Drawer.Content className="bg-background/95 backdrop-blur-3xl flex flex-col rounded-t-[20px] h-[85vh] mt-24 fixed bottom-0 inset-x-0 mx-auto w-full max-w-2xl z-[200] border-t border-white/10 outline-none shadow-[0_-10px_40px_-15px_rgba(0,0,0,0.5)]">
+
                     <div className="sr-only">
                         <Drawer.Title>Settings Drawer</Drawer.Title>
                         <Drawer.Description>Settings and preferences for the application</Drawer.Description>
@@ -210,7 +215,7 @@ const SmoothDrawer = ({ trigger, user, onAuthClick, darkMode, setDarkMode, open,
                             {tabs.map((tab) => (
                                 <button
                                     key={tab.id}
-                                    onClick={() => setActiveTab(tab.id)}
+                                    onClick={() => onTabChange && onTabChange(tab.id)}
                                     className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 ${activeTab === tab.id
                                         ? 'bg-secondary text-foreground shadow-sm'
                                         : 'text-muted-foreground hover:bg-secondary/50 hover:text-foreground'
@@ -329,7 +334,7 @@ const SmoothDrawer = ({ trigger, user, onAuthClick, darkMode, setDarkMode, open,
                                                     ) : userDetails ? (
                                                         <div className="grid grid-cols-1 gap-y-4 text-sm mt-2">
                                                             {Object.entries(userDetails)
-                                                                .filter(([key]) => !['id', 'username', 'avatar_url', 'status'].includes(key))
+                                                                .filter(([key]) => !['id', 'username', 'avatar_url', 'status', 'role', 'credits', 'created_at'].includes(key))
                                                                 .map(([key, value]) => {
                                                                     if (key === 'bookmarks') {
                                                                         return (
@@ -345,40 +350,6 @@ const SmoothDrawer = ({ trigger, user, onAuthClick, darkMode, setDarkMode, open,
                                                                                     >
                                                                                         View in For You
                                                                                     </button>
-                                                                                </div>
-                                                                            </div>
-                                                                        );
-                                                                    }
-
-                                                                    if (key === 'credits') {
-                                                                        const role = userDetails.role || 'freebiee';
-                                                                        const limits = { freebiee: 0, common: 20, wealthy: 50, administrator: 100 };
-                                                                        const monthlyLimit = limits[role] || 0;
-                                                                        const maxCap = monthlyLimit + 10;
-
-                                                                        return (
-                                                                            <div key={key} className="grid grid-cols-1 sm:grid-cols-3 gap-1 items-center">
-                                                                                <span className="font-medium text-muted-foreground uppercase text-xs">{key}</span>
-                                                                                <div className="col-span-2 flex items-center gap-2">
-                                                                                    <span className="font-mono text-foreground font-bold">
-                                                                                        {value}
-                                                                                    </span>
-                                                                                    <span className="text-muted-foreground text-xs">
-                                                                                        / {maxCap} (Monthly: {monthlyLimit})
-                                                                                    </span>
-                                                                                </div>
-                                                                            </div>
-                                                                        );
-                                                                    }
-
-                                                                    if (key === 'role') {
-                                                                        return (
-                                                                            <div key={key} className="grid grid-cols-1 sm:grid-cols-3 gap-1 items-center">
-                                                                                <span className="font-medium text-muted-foreground uppercase text-xs">Plan</span>
-                                                                                <div className="col-span-2">
-                                                                                    <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-bold bg-indigo-500/10 text-indigo-400 capitalize border border-indigo-500/20">
-                                                                                        {String(value)}
-                                                                                    </span>
                                                                                 </div>
                                                                             </div>
                                                                         );
@@ -505,13 +476,51 @@ const SmoothDrawer = ({ trigger, user, onAuthClick, darkMode, setDarkMode, open,
                                                         </div>
                                                     </div>
 
-                                                    <div className="grid grid-cols-2 gap-4">
-                                                        <div className="space-y-2">
-                                                            <label className="text-xs font-medium uppercase text-muted-foreground">Member Since</label>
-                                                            <div className="text-sm text-foreground font-mono">
-                                                                {new Date(user.created_at).toLocaleDateString()}
+                                                    {/* MOVED ITEMS: Plan, Credits, Created At */}
+                                                    {userDetails && (
+                                                        <div className="bg-card border border-border rounded-xl p-4 space-y-3">
+                                                            {/* Created At */}
+                                                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-1 items-center">
+                                                                <span className="font-medium text-muted-foreground uppercase text-xs">CREATED AT</span>
+                                                                <span className="col-span-2 font-mono truncate text-foreground text-xs sm:text-sm">
+                                                                    {userDetails.created_at ? String(userDetails.created_at) : new Date(user.created_at).toISOString()}
+                                                                </span>
+                                                            </div>
+
+                                                            {/* Plan */}
+                                                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-1 items-center">
+                                                                <span className="font-medium text-muted-foreground uppercase text-xs">PLAN</span>
+                                                                <div className="col-span-2">
+                                                                    <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-bold bg-indigo-500/10 text-indigo-400 capitalize border border-indigo-500/20">
+                                                                        {String(userDetails.role || 'Freebiee')}
+                                                                    </span>
+                                                                </div>
+                                                            </div>
+
+                                                            {/* Credits */}
+                                                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-1 items-center">
+                                                                <span className="font-medium text-muted-foreground uppercase text-xs">CREDITS</span>
+                                                                <div className="col-span-2 flex items-center gap-2">
+                                                                    <span className="font-mono text-foreground font-bold">
+                                                                        {userDetails.credits !== undefined ? userDetails.credits : 0}
+                                                                    </span>
+                                                                    {(() => {
+                                                                        const role = userDetails.role || 'freebiee';
+                                                                        const limits = { freebiee: 0, common: 20, wealthy: 50, administrator: 100 };
+                                                                        const monthlyLimit = limits[role] || 0;
+                                                                        const maxCap = monthlyLimit + 10;
+                                                                        return (
+                                                                            <span className="text-muted-foreground text-xs">
+                                                                                / {maxCap} (Monthly: {monthlyLimit})
+                                                                            </span>
+                                                                        );
+                                                                    })()}
+                                                                </div>
                                                             </div>
                                                         </div>
+                                                    )}
+
+                                                    <div className="grid grid-cols-2 gap-4">
                                                         <div className="space-y-2">
                                                             <label className="text-xs font-medium uppercase text-muted-foreground">Last Login</label>
                                                             <div className="text-sm text-foreground font-mono">
@@ -557,7 +566,7 @@ const SmoothDrawer = ({ trigger, user, onAuthClick, darkMode, setDarkMode, open,
                                         </p>
                                     </div>
                                     <button
-                                        onClick={() => setActiveTab('preferences')}
+                                        onClick={() => onTabChange && onTabChange('preferences')}
                                         className="text-primary text-sm font-medium hover:underline"
                                     >
                                         Go back to Preferences

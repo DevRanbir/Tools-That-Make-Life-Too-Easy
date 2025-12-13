@@ -20,6 +20,8 @@ const ShopPage = ({ navigateOnly, user, sortPreference }) => {
     const viewedIds = useRef(new Set());
     const [searchQuery, setSearchQuery] = useState('');
 
+    const [userDetails, setUserDetails] = useState(null);
+
     useEffect(() => {
         // Handle hash-based search on mount and hash change
         const handleHashChange = () => {
@@ -53,7 +55,12 @@ const ShopPage = ({ navigateOnly, user, sortPreference }) => {
                     return;
                 }
 
-                setTotalTools(productsData.length);
+                const paidToolsCount = productsData.filter(p =>
+                    p.price &&
+                    p.price.toLowerCase() !== 'free' &&
+                    p.price !== '0'
+                ).length;
+                setTotalTools(paidToolsCount);
 
                 // 2. Fetch User Bookmarks (if logged in)
                 let userBookmarks = new Set();
@@ -143,21 +150,48 @@ const ShopPage = ({ navigateOnly, user, sortPreference }) => {
     // Fetch bookmarks manually on this page if needed, or share logical fetch? 
     // Wait, Manual.jsx keeps `products` state internal. Search.jsx does too.
     // We need to fetch bookmarks here as well to show correct state.
+    // Fetch user details including bookmarks and credits
     useEffect(() => {
-        const fetchBookmarks = async () => {
+        const fetchUserDetails = async () => {
             if (!user) return;
-            const { data: userData } = await supabase
+            const { data } = await supabase
                 .from('user_details')
-                .select('bookmarks')
+                .select('bookmarks, role, credits')
                 .eq('id', user.id)
                 .single();
 
-            if (userData && userData.bookmarks) {
-                const bSet = new Set(userData.bookmarks);
-                setProducts(prev => prev.map(p => ({ ...p, isBookmarked: bSet.has(p.id) })));
+            if (data) {
+                // Check for credit limit overflow immediately
+                const currentCredits = Number(data.credits || 0);
+                const userRole = (data.role || 'freebiee').toLowerCase();
+                let roleLimit = 5;
+                if (userRole === 'common') roleLimit = 20;
+                if (userRole === 'wealthy') roleLimit = 50;
+                if (userRole === 'administrator') roleLimit = 100;
+
+                const maxAllowed = roleLimit + 10;
+
+                if (currentCredits > maxAllowed) {
+                    toast.error(`Credit limit exceeded! Adjusting your balance to the limit of ${maxAllowed}.`);
+
+                    // Update Supabase
+                    await supabase
+                        .from('user_details')
+                        .update({ credits: maxAllowed })
+                        .eq('id', user.id);
+
+                    // Update local state to the limit
+                    data.credits = maxAllowed;
+                }
+
+                setUserDetails(data);
+                if (data.bookmarks) {
+                    const bSet = new Set(data.bookmarks);
+                    setProducts(prev => prev.map(p => ({ ...p, isBookmarked: bSet.has(p.id) })));
+                }
             }
         };
-        if (products.length > 0) fetchBookmarks();
+        if (products.length > 0) fetchUserDetails();
     }, [products.length, user]);
 
     const handleBookmark = async (id) => {
@@ -210,10 +244,20 @@ const ShopPage = ({ navigateOnly, user, sortPreference }) => {
             } else if (plan.name === 'Wealthy') {
                 role = 'wealthy';
                 credits = 50;
-            } else if (plan.name === 'Administrator') {
-                role = 'administrator';
-                credits = 100;
+            } else if (plan.name === 'Administrator' || plan.href?.startsWith('mailto:')) {
+                if (plan.href) window.location.href = plan.href;
+                else toast.info("Please contact support to become an Administrator.");
+                return;
             }
+
+            // Warning about credit loss
+            const confirmed = window.confirm(
+                "Warning: Changing your role will reset your billing cycle and credit balance.\n\n" +
+                "Any current pending credits will be lost and replaced with the new plan's allocation.\n\n" +
+                "Do you want to proceed?"
+            );
+
+            if (!confirmed) return;
 
             const loadingToast = toast.loading(`Upgrading to ${plan.name}...`);
 
@@ -225,6 +269,10 @@ const ShopPage = ({ navigateOnly, user, sortPreference }) => {
 
                 if (error) throw error;
 
+                // Refresh user details
+                const { data: newData } = await supabase.from('user_details').select('*').eq('id', user.id).single();
+                if (newData) setUserDetails(newData);
+
                 toast.dismiss(loadingToast);
                 toast.success(`Successfully upgraded to ${plan.name}!`);
             } catch (error) {
@@ -233,7 +281,45 @@ const ShopPage = ({ navigateOnly, user, sortPreference }) => {
                 toast.error("Failed to upgrade role. Please try again.");
             }
         } else {
-            toast.info("Credit purchase coming soon!");
+            // BUY CREDITS LOGIC
+            if (!userDetails) {
+                toast.error("Could not verify user details. Please try again.");
+                return;
+            }
+
+            const purchaseAmount = plan.creditValue;
+            const currentCredits = Number(userDetails.credits || 0);
+            const userRole = (userDetails.role || 'freebiee').toLowerCase();
+
+            let roleLimit = 5; // Freebie default
+            if (userRole === 'common') roleLimit = 20;
+            if (userRole === 'wealthy') roleLimit = 50;
+            if (userRole === 'administrator') roleLimit = 100;
+
+            const maxAllowed = roleLimit + 10;
+
+            if (currentCredits + purchaseAmount > maxAllowed) {
+                toast.error(`Credit limit exceeded! You cannot hold more than ${maxAllowed} credits on your current plan.`);
+                return;
+            }
+
+            const loadingToast = toast.loading(`Purchasing ${purchaseAmount} credits...`);
+            try {
+                const { error } = await supabase.rpc('increment_credits', { amount: purchaseAmount, user_id: user.id });
+
+                if (error) throw error;
+
+                // Refresh
+                const { data: newData } = await supabase.from('user_details').select('*').eq('id', user.id).single();
+                if (newData) setUserDetails(newData);
+
+                toast.dismiss(loadingToast);
+                toast.success(`Purchased ${purchaseAmount} credits!`);
+            } catch (err) {
+                console.error('Error purchasing credits:', err);
+                toast.dismiss(loadingToast);
+                toast.error("Purchase failed.");
+            }
         }
     };
 
@@ -247,8 +333,8 @@ const ShopPage = ({ navigateOnly, user, sortPreference }) => {
     const rolePlans = [
         {
             name: "Common",
-            price: "5",
-            yearlyPrice: "4",
+            price: "40",
+            yearlyPrice: "38",
             period: "per month",
             features: [
                 "Role Badge: Common",
@@ -260,11 +346,12 @@ const ShopPage = ({ navigateOnly, user, sortPreference }) => {
             buttonText: "Upgrade to Common",
             href: "#",
             isPopular: false,
+            currency: "INR"
         },
         {
             name: "Wealthy",
-            price: "15",
-            yearlyPrice: "12",
+            price: "99",
+            yearlyPrice: "94",
             period: "per month",
             features: [
                 "Role Badge: Wealthy",
@@ -277,73 +364,75 @@ const ShopPage = ({ navigateOnly, user, sortPreference }) => {
             buttonText: "Upgrade to Wealthy",
             href: "#",
             isPopular: true,
+            currency: "INR"
         },
         {
             name: "Administrator",
-            price: "50",
-            yearlyPrice: "40",
-            period: "per month",
+            price: "Custom",
+            yearlyPrice: "Custom",
+            period: "contact only",
             features: [
                 "Role Badge: Administrator",
-                "100 Monthly Credits",
+                "Infinite Credits",
                 "Dedicated Support",
                 "All Tools Unlocked",
                 "Admin Dashboard Access"
             ],
             description: "Complete control and maximum power.",
-            buttonText: "become Administrator",
-            href: "#",
+            buttonText: "Contact Us",
+            href: "mailto:support@aios.com",
             isPopular: false,
         },
     ];
 
     const creditPlans = [
         {
-            name: "Credit Pack S",
-            price: "5",
-            yearlyPrice: "5", // One-time pruchase logic usually, but fitting component structure
+            name: "1 Credit",
+            price: "2",
+            yearlyPrice: "2",
             period: "one-time",
             features: [
-                "100 Credits",
-                "Never Expire",
+                "1 Credit",
                 "Instant Delivery"
             ],
-            description: "Top up your balance.",
-            buttonText: "Buy 100 Credits",
+            description: "Quick top-up.",
+            buttonText: "Buy 1 Credit",
             href: "#",
             isPopular: false,
+            creditValue: 1,
+            currency: "INR"
         },
         {
-            name: "Credit Pack M",
-            price: "20",
-            yearlyPrice: "20",
+            name: "5 Credits",
+            price: "8",
+            yearlyPrice: "8",
             period: "one-time",
             features: [
-                "500 Credits",
-                "Never Expire",
-                "Instant Delivery",
-                "Bonus: 50 Extra Credits"
+                "5 Credits",
+                "Instant Delivery"
             ],
-            description: "Best value for regular usage.",
-            buttonText: "Buy 500 Credits",
+            description: "Small bundle.",
+            buttonText: "Buy 5 Credits",
             href: "#",
             isPopular: true,
+            creditValue: 5,
+            currency: "INR"
         },
         {
-            name: "Credit Pack L",
-            price: "50",
-            yearlyPrice: "50",
+            name: "10 Credits",
+            price: "19",
+            yearlyPrice: "19",
             period: "one-time",
             features: [
-                "1500 Credits",
-                "Never Expire",
-                "Instant Delivery",
-                "Bonus: 200 Extra Credits"
+                "10 Credits",
+                "Instant Delivery"
             ],
-            description: "Stock up for big projects.",
-            buttonText: "Buy 1500 Credits",
+            description: "Best value pack.",
+            buttonText: "Buy 10 Credits",
             href: "#",
             isPopular: false,
+            creditValue: 10,
+            currency: "INR"
         },
     ];
 
@@ -359,28 +448,7 @@ const ShopPage = ({ navigateOnly, user, sortPreference }) => {
                     </p>
 
                     <div className="hero-search-wrapper">
-                        <div className="big-search-bar">
-                            <input
-                                type="text"
-                                placeholder="Search Shop..."
-                                value={searchQuery}
-                                onChange={(e) => {
-                                    const newVal = e.target.value;
-                                    setSearchQuery(newVal);
-                                    // Update hash without flooding history
-                                    if (newVal) {
-                                        window.history.replaceState(null, null, `#${encodeURIComponent(newVal)}`);
-                                    } else {
-                                        window.history.replaceState(null, null, window.location.pathname);
-                                    }
-                                }}
-                            />
-                            <div className="search-actions">
-                                <span className="kbd">CTRL + K</span>
-                                <button className="search-btn"><Search size={18} /></button>
-                            </div>
-                        </div>
-                        <div className="hero-footer-text">#Start typing to search a plan made for you.</div>
+                        <div className="hero-footer-text">#Start exploring to get a plan made just for you.</div>
                     </div>
                 </div>
             </div>

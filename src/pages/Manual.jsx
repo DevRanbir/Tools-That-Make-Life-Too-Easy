@@ -16,6 +16,54 @@ const Manual = ({ navigateOnly, pageName = 'Manual', user, sortPreference }) => 
     const [totalTools, setTotalTools] = useState(0);
     const viewedIds = useRef(new Set());
 
+    // Search State
+    const [searchQuery, setSearchQuery] = useState('');
+    const [filteredSuggestions, setFilteredSuggestions] = useState([]);
+    const [showDropdown, setShowDropdown] = useState(false);
+
+    // Search Filtering
+    useEffect(() => {
+        if (!searchQuery.trim()) {
+            setFilteredSuggestions([]);
+            return;
+        }
+
+        const lowerQ = searchQuery.toLowerCase();
+        // Use existing 'products' state for search suggestions as it contains loaded items
+        // Note: Manual.jsx might filter products for 'For You' view (line 94).
+        // If we want GLOBAL search suggestions even when viewing 'For You', we should ideally have the full list.
+        // However, 'products' here is whatever is displayed. 
+        // If user wants to search *global* database tools while on 'For You', we technically need the full list.
+        // But the previous implementation in Home.jsx fetched a separate list.
+        // Let's rely on 'products' for now. If 'For You' filters distinct items, suggestions will only show saved items.
+        // Use-case: "Search..." on "For You" probably implies searching *saved* stuff? 
+        // Or searching *global* stuff? 
+        // User said: "showing... AI tool... saved". 
+        // Usually top search is global. 
+        // If 'products' is filtered, this search is local to the view.
+        // Let's stick to using 'products' (what's visible/loaded) for simplicity unless requested otherwise.
+        // actually looking at Home.jsx, it fetched *separate* global list.
+        // Manual.jsx fetches *global* list first (data), then filters it for 'For You'.
+        // BUT 'products' state is updated to the *filtered* list (line 138).
+        // So this will search only visible items. 
+        // If global search is desired, we'd need a separate full list state.
+        // Let's leave it as searching visible items for now or maybe filtering implies navigation?
+        // Wait, Home.jsx's logic was: fetch small list of *all* products title/name.
+        // Manual.jsx fetches *all* products full data.
+        // So we can just use the initial full list... but we lose it after filtering.
+        // Let's just use 'products' (what is on screen) for now to be safe, or 
+        // better: Filter from the *suggestion* perspective.
+        // If user types "auto", they probably want to find tools, not just saved ones.
+        // Let's accept that for now it searches current view. 
+
+        const matches = products.filter(p =>
+            (p.title && p.title.toLowerCase().includes(lowerQ)) ||
+            (p.name && p.name.toLowerCase().includes(lowerQ))
+        ).slice(0, 5);
+
+        setFilteredSuggestions(matches);
+    }, [searchQuery, products]);
+
     useEffect(() => {
         const fetchProducts = async () => {
             try {
@@ -233,7 +281,8 @@ const Manual = ({ navigateOnly, pageName = 'Manual', user, sortPreference }) => 
 
     return (
         <div className="feed-page min-h-screen bg-background relative pb-32">
-            <div className="hero-sticky-wrapper">
+            {/* Dynamic Z-index to ensure dropdown shows over content */}
+            <div className={`hero-sticky-wrapper ${showDropdown ? '!z-[100]' : ''}`}>
                 <div className="hero-section">
                     <h1 className="hero-title">
                         Tools That Make Life <br /> Too Easy
@@ -251,20 +300,51 @@ const Manual = ({ navigateOnly, pageName = 'Manual', user, sortPreference }) => 
                     </p>
 
                     <div className="hero-search-wrapper">
-                        <div className="big-search-bar">
+                        <div className="big-search-bar relative">
                             <input
                                 type="text"
                                 placeholder="Search..."
+                                value={searchQuery}
+                                onChange={(e) => {
+                                    setSearchQuery(e.target.value);
+                                    setShowDropdown(true);
+                                }}
+                                onFocus={() => setShowDropdown(true)}
+                                onBlur={() => setTimeout(() => setShowDropdown(false), 200)}
                                 onKeyDown={(e) => {
-                                    if (e.key === 'Enter' && e.target.value.trim()) {
+                                    if (e.key === 'Enter' && searchQuery.trim()) {
                                         navigateOnly('search');
-                                        // Small timeout to allow state change then update hash
                                         setTimeout(() => {
-                                            window.location.hash = encodeURIComponent(e.target.value.trim());
+                                            window.location.hash = encodeURIComponent(searchQuery.trim());
                                         }, 0);
+                                        setShowDropdown(false);
                                     }
                                 }}
                             />
+                            {/* Search Dropdown */}
+                            {showDropdown && searchQuery && filteredSuggestions.length > 0 && (
+                                <div className="absolute top-full left-0 right-0 mt-4 bg-zinc-950 border border-zinc-800 rounded-2xl shadow-2xl z-[100] overflow-hidden text-left animate-in fade-in slide-in-from-top-2 duration-200">
+                                    {filteredSuggestions.map((item, idx) => (
+                                        <div
+                                            key={idx}
+                                            className="px-5 py-4 hover:bg-white/5 cursor-pointer flex items-center gap-3 transition-colors group border-b border-white/5 last:border-0"
+                                            onClick={() => {
+                                                const term = item.title || item.name;
+                                                setSearchQuery(term);
+                                                navigateOnly('search');
+                                                setTimeout(() => {
+                                                    window.location.hash = encodeURIComponent(term);
+                                                }, 0);
+                                            }}
+                                        >
+                                            <Search size={16} className="text-zinc-500 group-hover:text-white transition-colors" />
+                                            <span className="text-base font-medium text-zinc-300 group-hover:text-white transition-colors truncate">
+                                                {item.title || item.name}
+                                            </span>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
                             <div className="search-actions">
                                 <span className="kbd">CTRL + K</span>
                                 <button

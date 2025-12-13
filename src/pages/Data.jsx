@@ -6,8 +6,9 @@ import FileExplorer from '../components/FileExplorer';
 const DataPage = ({ navigateOnly, user }) => {
     const navTabs = [
         { id: 'home', label: 'For you', icon: <ChevronDown size={14} fill="currentColor" /> },
-        { id: 'data', label: 'Data' },
-        { id: 'calendar', label: 'Calendar' }
+        { id: 'todos', label: 'Todo' },
+        { id: 'calendar', label: 'Calendar' },
+        { id: 'data', label: 'Data' }
     ];
 
     const [totalFiles, setTotalFiles] = useState(0);

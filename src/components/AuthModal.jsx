@@ -148,6 +148,54 @@ const AuthModal = ({ isOpen, onClose, startStep = 0, mode = 'default', user }) =
         }
     };
 
+    const validateUsername = async (username) => {
+        setError(null);
+        setLoading(true);
+
+        // 1. Check characters
+        const regex = /^[a-zA-Z0-9_#-]+$/;
+        if (!regex.test(username)) {
+            setError("Username can only contain letters, numbers, #, _, and -");
+            setLoading(false);
+            return false;
+        }
+
+        // 2. Check uniqueness (case-insensitive)
+        try {
+            const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+            if (!session) return false;
+
+            const { data, error } = await supabase
+                .from('user_details')
+                .select('id')
+                .ilike('username', username)
+                .maybeSingle();
+
+            if (error) {
+                console.error("Validation check failed", error);
+                // Fail open or closed? Closed is safer for uniqueness.
+                setError("Could not validate username. Please try again.");
+                setLoading(false);
+                return false;
+            }
+
+            if (data && data.id !== session.user.id) {
+                setError("Username is already taken.");
+                setLoading(false);
+                return false;
+            }
+
+        } catch (err) {
+            console.error(err);
+            setError("Validation error.");
+            setLoading(false);
+            return false;
+        }
+
+        setLoading(false);
+        return true;
+    };
+
     const handleOnboardingSubmit = async () => {
         setLoading(true);
         try {
@@ -438,18 +486,22 @@ const AuthModal = ({ isOpen, onClose, startStep = 0, mode = 'default', user }) =
                                                 placeholder="@username"
                                                 autoFocus
                                             />
+                                            {error && step === 1 && (
+                                                <p className="text-red-400 text-xs font-medium ml-1 mt-1">{error}</p>
+                                            )}
                                         </div>
                                     )}
 
                                     <button
-                                        onClick={() => {
+                                        onClick={async () => {
                                             if (mode === 'avatar_only') {
-                                                handleOnboardingSubmit();
+                                                await handleOnboardingSubmit();
                                             } else {
-                                                setStep(2);
+                                                const isValid = await validateUsername(onboardingData.username);
+                                                if (isValid) setStep(2);
                                             }
                                         }}
-                                        disabled={(!onboardingData.username && mode !== 'avatar_only')}
+                                        disabled={(!onboardingData.username && mode !== 'avatar_only') || loading}
                                         className="w-full bg-white hover:bg-zinc-200 text-black font-bold py-3.5 rounded-xl transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                                     >
                                         {mode === 'avatar_only' ? 'Save Avatar' : 'Continue'} {(mode !== 'avatar_only') && <ArrowRight size={16} />}
