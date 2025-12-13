@@ -380,7 +380,7 @@ const ShopPage = ({ navigateOnly, user, sortPreference }) => {
             ],
             description: "Complete control and maximum power.",
             buttonText: "Contact Us",
-            href: "mailto:support@aios.com",
+            href: "mailto:support@toolsthatmakelifetooeasy.com",
             isPopular: false,
         },
     ];

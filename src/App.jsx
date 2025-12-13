@@ -96,23 +96,23 @@ const App = () => {
       setActivePage(newPage);
       return;
     }
-    
+
     // Clear any existing timers to prevent glitches
     clearTimers();
 
     setLoadingScope('local');
     setLoaderTheme(darkMode); // Sync to current theme BEFORE showing loader
     // 1. Show loader
-    setLoadingState('active'); 
-    
+    setLoadingState('active');
+
     // 2. Wait for fade/transition, then switch page
     timerRef.current = setTimeout(() => {
       setActivePage(newPage);
-      
+
       // 3. Keep loader for a moment then fade out
       timerRef.current = setTimeout(() => {
         setLoadingState('fading');
-        
+
         // 4. Turn off
         timerRef.current = setTimeout(() => {
           setLoadingState('off');
@@ -191,16 +191,20 @@ const App = () => {
   // 2. Sync state to URL
   useEffect(() => {
     let path = '/';
-    if (activePage === 'manage') path = '/manage';
-    else if (activePage === 'search') path = '/search';
-    else if (activePage === 'todos') path = '/todos';
-    else if (activePage === 'tags') path = '/tags';
-    else if (activePage === 'fastmode') path = '/fast';
-    else if (activePage === 'shop') path = '/shop';
-    else if (activePage === 'calendar') path = '/calendar';
-    else if (activePage === 'data') path = '/data';
-    else if (activePage === 'home') path = '/for-you';
-    else path = '/'; // manual
+    let pageTitle = 'Manual';
+
+    if (activePage === 'manage') { path = '/manage'; pageTitle = 'Manage'; }
+    else if (activePage === 'search') { path = '/search'; pageTitle = 'Search'; }
+    else if (activePage === 'todos') { path = '/todos'; pageTitle = 'Todos'; }
+    else if (activePage === 'tags') { path = '/tags'; pageTitle = 'Tags'; }
+    else if (activePage === 'fastmode') { path = '/fast'; pageTitle = 'Fast Mode'; }
+    else if (activePage === 'shop') { path = '/shop'; pageTitle = 'Shop'; }
+    else if (activePage === 'calendar') { path = '/calendar'; pageTitle = 'Calendar'; }
+    else if (activePage === 'data') { path = '/data'; pageTitle = 'Data'; }
+    else if (activePage === 'home') { path = '/for-you'; pageTitle = 'For You'; }
+    else { path = '/'; pageTitle = 'Manual'; } // manual
+
+    document.title = `${pageTitle} - Tools That Make Life Too Easy`;
 
     if (window.location.pathname !== path) {
       // Preserve hash if it exists (e.g. for search)

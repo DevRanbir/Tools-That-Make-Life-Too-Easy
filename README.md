@@ -1,4 +1,4 @@
-# AIOS - AI Tools Directory
+# Tools That Make Life Too Easy - AI Tools Directory
 
 A modern, interactive directory for AI tools and products, featuring a dynamic masonry grid layout, realtime updates, and a sleek user interface. Built with React, Vite, and Supabase.
 
@@ -41,7 +41,7 @@ A modern, interactive directory for AI tools and products, featuring a dynamic m
 1.  **Clone the repository**
     ```bash
     git clone <repository-url>
-    cd aios
+    cd tools-that-make-life-too-easy
     ```
 
 2.  **Install dependencies**
