@@ -6,10 +6,9 @@ import CalendarComponent from '../components/comp-542';
 const CalendarPage = ({ navigateOnly, user }) => {
     const [eventCounts, setEventCounts] = React.useState({ ongoing: 0, upcoming: 0 });
     const navTabs = [
-        { id: 'home', label: 'For you', icon: <ChevronDown size={14} fill="currentColor" /> },
         { id: 'todos', label: 'Todo' },
-        { id: 'calendar', label: 'Calendar' },
-        { id: 'data', label: 'Data' }
+        { id: 'notes', label: 'Notes' },
+        { id: 'calendar', label: 'Calendar' }
     ];
 
     return (
@@ -23,39 +22,6 @@ const CalendarPage = ({ navigateOnly, user }) => {
                     <p className="hero-subtitle">
                         {eventCounts.ongoing} <span className="text-destructive font-bold">Ongoing</span> and {eventCounts.upcoming} <span className="text-destructive font-bold">Upcoming events</span>
                     </p>
-
-                    <div className="hero-search-wrapper">
-                        <div className="big-search-bar">
-                            <input
-                                type="text"
-                                placeholder="Search..."
-                                onKeyDown={(e) => {
-                                    if (e.key === 'Enter' && e.target.value.trim()) {
-                                        navigateOnly('search');
-                                        setTimeout(() => {
-                                            window.location.hash = encodeURIComponent(e.target.value.trim());
-                                        }, 0);
-                                    }
-                                }}
-                            />
-                            <div className="search-actions">
-                                <span className="kbd">CTRL + K</span>
-                                <button
-                                    className="search-btn"
-                                    onClick={(e) => {
-                                        const input = e.currentTarget.parentElement.previousElementSibling;
-                                        if (input && input.value.trim()) {
-                                            navigateOnly('search');
-                                            setTimeout(() => {
-                                                window.location.hash = encodeURIComponent(input.value.trim());
-                                            }, 0);
-                                        }
-                                    }}
-                                ><Search size={18} /></button>
-                            </div>
-                        </div>
-                        <div className="hero-footer-text">#1 website for AI tools. Used by 70M+ humans.</div>
-                    </div>
                 </div>
             </div>
 

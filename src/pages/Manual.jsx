@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { TrendingUp, Search } from 'lucide-react';
+import { TrendingUp, Search, Bookmark } from 'lucide-react';
 import MagneticMorphingNav from '../components/MagneticMorphingNav';
 import Masonry from '../components/Masonry';
 import { useRef, useState, useEffect } from 'react';
@@ -299,70 +299,7 @@ const Manual = ({ navigateOnly, pageName = 'Manual', user, sortPreference }) => 
                         )}
                     </p>
 
-                    <div className="hero-search-wrapper">
-                        <div className="big-search-bar relative">
-                            <input
-                                type="text"
-                                placeholder="Search..."
-                                value={searchQuery}
-                                onChange={(e) => {
-                                    setSearchQuery(e.target.value);
-                                    setShowDropdown(true);
-                                }}
-                                onFocus={() => setShowDropdown(true)}
-                                onBlur={() => setTimeout(() => setShowDropdown(false), 200)}
-                                onKeyDown={(e) => {
-                                    if (e.key === 'Enter' && searchQuery.trim()) {
-                                        navigateOnly('search');
-                                        setTimeout(() => {
-                                            window.location.hash = encodeURIComponent(searchQuery.trim());
-                                        }, 0);
-                                        setShowDropdown(false);
-                                    }
-                                }}
-                            />
-                            {/* Search Dropdown */}
-                            {showDropdown && searchQuery && filteredSuggestions.length > 0 && (
-                                <div className="absolute top-full left-0 right-0 mt-4 bg-zinc-950 border border-zinc-800 rounded-2xl shadow-2xl z-[100] overflow-hidden text-left animate-in fade-in slide-in-from-top-2 duration-200">
-                                    {filteredSuggestions.map((item, idx) => (
-                                        <div
-                                            key={idx}
-                                            className="px-5 py-4 hover:bg-white/5 cursor-pointer flex items-center gap-3 transition-colors group border-b border-white/5 last:border-0"
-                                            onClick={() => {
-                                                const term = item.title || item.name;
-                                                setSearchQuery(term);
-                                                navigateOnly('search');
-                                                setTimeout(() => {
-                                                    window.location.hash = encodeURIComponent(term);
-                                                }, 0);
-                                            }}
-                                        >
-                                            <Search size={16} className="text-zinc-500 group-hover:text-white transition-colors" />
-                                            <span className="text-base font-medium text-zinc-300 group-hover:text-white transition-colors truncate">
-                                                {item.title || item.name}
-                                            </span>
-                                        </div>
-                                    ))}
-                                </div>
-                            )}
-                            <div className="search-actions">
-                                <span className="kbd">CTRL + K</span>
-                                <button
-                                    className="search-btn"
-                                    onClick={(e) => {
-                                        const input = e.currentTarget.parentElement.previousElementSibling;
-                                        if (input && input.value.trim()) {
-                                            navigateOnly('search');
-                                            setTimeout(() => {
-                                                window.location.hash = encodeURIComponent(input.value.trim());
-                                            }, 0);
-                                        }
-                                    }}
-                                ><Search size={18} /></button>
-                            </div>
-                        </div>
-                        <div className="hero-footer-text">#1 website for AI tools. Used by 70M+ humans.</div>
-                    </div>
+
                 </div>
             </div>
 
@@ -386,20 +323,38 @@ const Manual = ({ navigateOnly, pageName = 'Manual', user, sortPreference }) => 
                         </div>
                     </div>
 
-                    <Masonry
-                        items={products}
-                        ease="power3.out"
-                        duration={0.6}
-                        stagger={0.05}
-                        animateFrom="bottom"
-                        scaleOnHover={true}
-                        hoverScale={0.95}
-                        blurToFocus={true}
-                        colorShiftOnHover={false}
-                        onBookmark={handleBookmark}
-                        onLike={handleLike}
-                        user={user}
-                    />
+                    {pageName === 'For You' && products.length === 0 ? (
+                        <div className="flex flex-col items-center justify-center py-16 text-center animate-in fade-in duration-500">
+                            <div className="w-20 h-20 bg-secondary/50 rounded-full flex items-center justify-center mb-6">
+                                <Bookmark size={36} className="text-muted-foreground" />
+                            </div>
+                            <h3 className="text-2xl font-bold mb-3">No saved tools yet</h3>
+                            <p className="text-muted-foreground max-w-md mb-8 text-lg">
+                                {user ? "Your collection is looking a bit empty. Explore the manual to find and bookmark tools you love!" : "Log in to access your saved tools and start building your collection."}
+                            </p>
+                            <button 
+                                onClick={() => navigateOnly('manual')}
+                                className="px-8 py-3 bg-foreground text-background rounded-full font-semibold hover:opacity-90 transition-all hover:scale-105 active:scale-95"
+                            >
+                                {user ? "Explore Manual" : "Go to Manual"}
+                            </button>
+                        </div>
+                    ) : (
+                        <Masonry
+                            items={products}
+                            ease="power3.out"
+                            duration={0.6}
+                            stagger={0.05}
+                            animateFrom="bottom"
+                            scaleOnHover={true}
+                            hoverScale={0.95}
+                            blurToFocus={true}
+                            colorShiftOnHover={false}
+                            onBookmark={handleBookmark}
+                            onLike={handleLike}
+                            user={user}
+                        />
+                    )}
                 </div>
             </div>
         </div>

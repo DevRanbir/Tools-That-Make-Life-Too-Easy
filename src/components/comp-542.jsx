@@ -22,27 +22,57 @@ export default function Component({ user, onEventCountChange }) {
   // Fetch events from Supabase
   useEffect(() => {
     if (!user) return;
-    
+
     // ... existing fetch logic ...
     const fetchEvents = async () => {
-      const { data, error } = await supabase
+      const { data: eventsData, error: eventsError } = await supabase
         .from('events')
         .select('*')
         .eq('user_id', user.id);
 
-      if (error) {
-        console.error('Error fetching events:', error);
-      } else if (data) {
-        const mappedEvents = data.map(evt => ({
-          id: evt.id,
-          title: evt.title,
-          start: new Date(evt.start_time),
-          end: new Date(evt.end_time),
-          allDay: evt.all_day,
-          description: evt.description,
-          location: evt.location,
-          color: evt.color || 'primary'
-        }));
+      if (eventsError) {
+        console.error('Error fetching events:', eventsError);
+      } else if (eventsData) {
+        // Fetch Linked Todos
+        const eventIds = eventsData.map(e => e.id);
+        let todosMap = {};
+
+        if (eventIds.length > 0) {
+          const { data: linksData } = await supabase
+            .from('event_todos')
+            .select('event_id, todos(text, completed)')
+            .in('event_id', eventIds);
+
+          if (linksData) {
+            linksData.forEach(link => {
+              if (link.todos) {
+                if (!todosMap[link.event_id]) todosMap[link.event_id] = [];
+                todosMap[link.event_id].push(link.todos);
+              }
+            });
+          }
+        }
+
+        const mappedEvents = eventsData.map(evt => {
+          let desc = evt.description || '';
+          const linked = todosMap[evt.id];
+
+          if (linked && linked.length > 0) {
+            const todoList = linked.map(t => `${t.completed ? '✅' : '☐'} ${t.text}`).join('\n');
+            desc = desc ? `${desc}\n\n-----------------\nLinked Tasks:\n${todoList}` : `Linked Tasks:\n${todoList}`;
+          }
+
+          return {
+            id: evt.id,
+            title: evt.title,
+            start: new Date(evt.start_time),
+            end: new Date(evt.end_time),
+            allDay: evt.all_day,
+            description: desc,
+            location: evt.location,
+            color: evt.color || 'primary'
+          };
+        });
         setEvents(mappedEvents);
       }
     };
@@ -76,6 +106,7 @@ export default function Component({ user, onEventCountChange }) {
     } else if (data) {
       // Replace temp ID with real ID
       setEvents(prev => prev.map(e => e.id === tempId ? { ...e, id: data.id } : e));
+      window.dispatchEvent(new Event('events-updated'));
     }
   };
 
@@ -97,6 +128,7 @@ export default function Component({ user, onEventCountChange }) {
     }).eq('id', updatedEvent.id);
 
     if (error) console.error("Error updating event:", error);
+    else window.dispatchEvent(new Event('events-updated'));
   };
 
   const handleEventDelete = async (eventId) => {
@@ -107,6 +139,7 @@ export default function Component({ user, onEventCountChange }) {
 
     const { error } = await supabase.from('events').delete().eq('id', eventId);
     if (error) console.error("Error deleting event:", error);
+    else window.dispatchEvent(new Event('events-updated'));
   };
 
   return (

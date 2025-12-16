@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { Drawer } from 'vaul';
-import { Settings, X, Moon, Sun, User, LogOut, Database, CreditCard, Layout, Eye, EyeOff, FileText, Image as ImageIcon, Folder, File } from 'lucide-react';
+import { Settings, X, Moon, Sun, User, LogOut, Database, CreditCard, Layout, Eye, EyeOff, FileText, Image as ImageIcon, Folder, File, Home, Search, ShoppingBag, ListTodo, Calendar as CalendarIcon, Tag, Zap, Monitor } from 'lucide-react';
 import { supabase } from '../supabase';
 
-const SmoothDrawer = ({ trigger, user, onAuthClick, darkMode, setDarkMode, open, onOpenChange, rightSidebarMode, setRightSidebarMode, setActivePage, activeTab = 'preferences', onTabChange }) => {
+const SmoothDrawer = ({ trigger, user, onAuthClick, darkMode, setDarkMode, open, onOpenChange, rightSidebarMode, setRightSidebarMode, setActivePage, activeTab = 'preferences', onTabChange, pinnedPages = [], updatePinnedPages, updateSettingPreference }) => {
     // Controlled state: use activeTab and onTabChange from props
 
     // Account State
@@ -152,7 +152,10 @@ const SmoothDrawer = ({ trigger, user, onAuthClick, darkMode, setDarkMode, open,
 
             // 4. Update Auth Metadata
             const { error: updateAuthError } = await supabase.auth.updateUser({
-                data: { avatar_url: publicUrl }
+                data: {
+                    avatar_url: publicUrl,
+                    avatar_preference: 'custom' // Explicitly set preference to custom on upload
+                }
             });
 
             if (updateAuthError) throw updateAuthError;
@@ -163,6 +166,7 @@ const SmoothDrawer = ({ trigger, user, onAuthClick, darkMode, setDarkMode, open,
                 .upsert({
                     id: user.id,
                     avatar_url: publicUrl,
+                    avatar_preference: 'custom', // Sync to table
                     updated_at: new Date().toISOString()
                 });
 
@@ -190,6 +194,32 @@ const SmoothDrawer = ({ trigger, user, onAuthClick, darkMode, setDarkMode, open,
         { id: 'account', label: 'Account', icon: User },
         { id: 'billing', label: 'Billing', icon: CreditCard },
     ];
+
+    const availablePages = [
+        { id: 'search', label: 'Search', icon: Search },
+        { id: 'home', label: 'For You', icon: Home }, // Using Home icon for 'For You' as per sidebar
+        { id: 'shop', label: 'Shop', icon: ShoppingBag },
+        { id: 'todos', label: 'Todos', icon: ListTodo },
+        { id: 'calendar', label: 'Calendar', icon: CalendarIcon },
+        { id: 'tags', label: 'Tags', icon: Tag },
+        { id: 'fastmode', label: 'Fast Mode', icon: Zap },
+        { id: 'data', label: 'Data', icon: Database },
+    ];
+
+    const handleTogglePin = (pageId) => {
+        if (!user || !updatePinnedPages) return;
+
+        const isPinned = pinnedPages.includes(pageId);
+        if (isPinned) {
+            updatePinnedPages(pinnedPages.filter(id => id !== pageId));
+        } else {
+            if (pinnedPages.length >= 3) {
+                // Ideally show toast here, but for now just don't add
+                return;
+            }
+            updatePinnedPages([...pinnedPages, pageId]);
+        }
+    };
 
     return (
         <Drawer.Root shouldScaleBackground open={open} onOpenChange={onOpenChange}>
@@ -266,54 +296,122 @@ const SmoothDrawer = ({ trigger, user, onAuthClick, darkMode, setDarkMode, open,
                                         <p className="text-sm text-muted-foreground">Manage your interface and display settings.</p>
                                     </div>
 
-                                    <div className="space-y-6">
-                                        {/* Right Sidebar Visibility */}
-                                        <div className="space-y-3">
-                                            <h4 className="text-sm font-medium text-foreground">Right Sidebar Visibility</h4>
-                                            <div className="grid grid-cols-2 gap-2">
-                                                {[
-                                                    { id: 'full', label: 'Full Display', icon: Layout },
-                                                    { id: 'events', label: 'Events Only', icon: Eye },
-                                                    { id: 'saved', label: 'Saved Only', icon: FileText },
-                                                    { id: 'hidden', label: 'Hidden', icon: EyeOff },
-                                                ].map((option) => (
-                                                    <button
-                                                        key={option.id}
-                                                        onClick={() => setRightSidebarMode(option.id)}
-                                                        className={`flex flex-col items-center justify-center gap-2 p-4 rounded-xl border transition-all duration-200 ${rightSidebarMode === option.id
-                                                            ? 'bg-primary/10 border-primary text-primary'
-                                                            : 'bg-card border-border hover:bg-secondary/50 hover:border-secondary text-muted-foreground'
-                                                            }`}
-                                                    >
-                                                        <option.icon size={20} />
-                                                        <span className="text-xs font-medium">{option.label}</span>
-                                                    </button>
-                                                ))}
+                                    {user && (
+                                        <>
+                                            <div className="space-y-6">
+                                                {/* Right Sidebar Visibility */}
+                                                <div className="space-y-3">
+                                                    <h4 className="text-sm font-medium text-foreground">Right Sidebar Visibility</h4>
+                                                    <div className="grid grid-cols-2 gap-2">
+                                                        {[
+                                                            { id: 'full', label: 'Full Display', icon: Layout },
+                                                            { id: 'events', label: 'Events Only', icon: Eye },
+                                                            { id: 'saved', label: 'Saved Only', icon: FileText },
+                                                            { id: 'hidden', label: 'Hidden', icon: EyeOff },
+                                                        ].map((option) => (
+                                                            <button
+                                                                key={option.id}
+                                                                onClick={() => {
+                                                                    setRightSidebarMode(option.id);
+                                                                    if (updateSettingPreference) updateSettingPreference('right_sidebar_mode', option.id);
+                                                                }}
+                                                                className={`flex flex-col items-center justify-center gap-2 p-4 rounded-xl border transition-all duration-200 ${rightSidebarMode === option.id
+                                                                    ? 'bg-primary/10 border-primary text-primary'
+                                                                    : 'bg-card border-border hover:bg-secondary/50 hover:border-secondary text-muted-foreground'
+                                                                    }`}
+                                                            >
+                                                                <option.icon size={20} />
+                                                                <span className="text-xs font-medium">{option.label}</span>
+                                                            </button>
+                                                        ))}
+                                                    </div>
+                                                </div>
+
+                                                {/* Tool Deck Defaults */}
+                                                <div className="space-y-3">
+                                                    <h4 className="text-sm font-medium text-foreground">Tool Deck Defaults</h4>
+                                                    <div className="grid grid-cols-3 gap-2">
+                                                        {[
+                                                            { id: 'todos', label: 'Todos', icon: ListTodo },
+                                                            { id: 'notes', label: 'Notes', icon: FileText },
+                                                            { id: 'calendar', label: 'Calendar', icon: CalendarIcon },
+                                                        ].map((option) => {
+                                                            const currentToolDeck = user?.user_metadata?.setting_preferences?.tool_deck_tab || 'todos';
+                                                            const isActive = currentToolDeck === option.id;
+                                                            return (
+                                                                <button
+                                                                    key={option.id}
+                                                                    onClick={() => updateSettingPreference && updateSettingPreference('tool_deck_tab', option.id)}
+                                                                    className={`flex flex-col items-center justify-center gap-2 p-4 rounded-xl border transition-all duration-200 ${isActive
+                                                                        ? 'bg-primary/10 border-primary text-primary'
+                                                                        : 'bg-card border-border hover:bg-secondary/50 hover:border-secondary text-muted-foreground'
+                                                                        }`}
+                                                                >
+                                                                    <option.icon size={20} />
+                                                                    <span className="text-xs font-medium">{option.label}</span>
+                                                                </button>
+                                                            );
+                                                        })}
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            <div className="h-px bg-border" />
+
+                                            {/* Pinned Pages (Right Sidebar) */}
+                                            <div className="space-y-3">
+                                                <div className="flex items-center justify-between">
+                                                    <h4 className="text-sm font-medium text-foreground">Top 3 Pinned Pages</h4>
+                                                    <span className="text-xs text-muted-foreground">{pinnedPages.length}/3 selected</span>
+                                                </div>
+                                                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                                                    {availablePages.map((page) => {
+                                                        const isPinned = pinnedPages.includes(page.id);
+                                                        return (
+                                                            <button
+                                                                key={page.id}
+                                                                onClick={() => handleTogglePin(page.id)}
+                                                                disabled={!isPinned && pinnedPages.length >= 3}
+                                                                className={`flex flex-col items-center justify-center gap-2 p-3 rounded-xl border transition-all duration-200 ${isPinned
+                                                                    ? 'bg-primary/10 border-primary text-primary'
+                                                                    : 'bg-card border-border hover:bg-secondary/50 hover:border-secondary text-muted-foreground disabled:opacity-50 disabled:cursor-not-allowed'
+                                                                    }`}
+                                                            >
+                                                                <page.icon size={18} />
+                                                                <span className="text-xs font-medium">{page.label}</span>
+                                                            </button>
+                                                        );
+                                                    })}
+                                                </div>
+                                                <p className="text-[10px] text-muted-foreground text-center pt-1">
+                                                    Selected pages will appear in your right sidebar for quick access.
+                                                </p>
+                                            </div>
+
+                                            <div className="h-px bg-border" />
+                                        </>
+                                    )}
+
+                                    {/* Dark Mode */}
+                                    <div className="flex items-center justify-between p-4 bg-card border border-border rounded-xl">
+                                        <div className="flex items-center gap-3">
+                                            <div className="p-2 rounded-lg bg-secondary text-foreground">
+                                                {darkMode ? <Moon size={18} /> : <Sun size={18} />}
+                                            </div>
+                                            <div>
+                                                <div className="font-medium text-sm">Theme Mode</div>
+                                                <div className="text-xs text-muted-foreground">{darkMode ? 'Dark Mode' : 'Light Mode'}</div>
                                             </div>
                                         </div>
-
-                                        <div className="h-px bg-border" />
-
-                                        {/* Dark Mode */}
-                                        <div className="flex items-center justify-between p-4 bg-card border border-border rounded-xl">
-                                            <div className="flex items-center gap-3">
-                                                <div className="p-2 rounded-lg bg-secondary text-foreground">
-                                                    {darkMode ? <Moon size={18} /> : <Sun size={18} />}
-                                                </div>
-                                                <div>
-                                                    <div className="font-medium text-sm">Theme Mode</div>
-                                                    <div className="text-xs text-muted-foreground">{darkMode ? 'Dark Mode' : 'Light Mode'}</div>
-                                                </div>
-                                            </div>
-                                            <button
-                                                onClick={() => setDarkMode(!darkMode)}
-                                                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 ${!darkMode ? 'bg-primary' : 'bg-zinc-700'}`}
-                                            >
-                                                <span className={`${!darkMode ? 'translate-x-6' : 'translate-x-1'} inline-block h-4 w-4 transform rounded-full bg-white transition-transform`} />
-                                            </button>
-                                        </div>
+                                        <button
+                                            onClick={() => setDarkMode(!darkMode)}
+                                            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 ${!darkMode ? 'bg-primary' : 'bg-zinc-700'}`}
+                                        >
+                                            <span className={`${!darkMode ? 'translate-x-6' : 'translate-x-1'} inline-block h-4 w-4 transform rounded-full bg-white transition-transform`} />
+                                        </button>
                                     </div>
                                 </div>
+
                             )}
 
                             {activeTab === 'data' && (
@@ -515,6 +613,18 @@ const SmoothDrawer = ({ trigger, user, onAuthClick, darkMode, setDarkMode, open,
                                                                             </span>
                                                                         );
                                                                     })()}
+                                                                    <button
+                                                                        onClick={() => {
+                                                                            if (onOpenChange) onOpenChange(false);
+                                                                            if (setActivePage) setActivePage('shop');
+                                                                            setTimeout(() => {
+                                                                                window.location.hash = 'tab=buy_credits';
+                                                                            }, 100);
+                                                                        }}
+                                                                        className="ml-auto text-[10px] bg-primary/10 text-primary px-2 py-1 rounded-md hover:bg-primary/20 transition-colors whitespace-nowrap font-medium"
+                                                                    >
+                                                                        Get more
+                                                                    </button>
                                                                 </div>
                                                             </div>
                                                         </div>

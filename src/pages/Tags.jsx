@@ -238,58 +238,58 @@ const TagsPage = ({ navigateOnly, user, sortPreference }) => {
                         {allTags.length.toLocaleString()} <span className="text-destructive font-bold">Tags ready to be searched</span>
                     </p>
 
-                    <div className="hero-search-wrapper">
-                        {/* 1. Search Bar for Tags */}
-                        <div className="big-search-bar">
-                            <input
-                                type="text"
-                                placeholder="Search tags..."
-                                value={tagSearchQuery}
-                                onChange={(e) => setTagSearchQuery(e.target.value)}
-                            />
-                            <div className="search-actions">
-                                <span className="kbd">CTRL + K</span>
-                                <button className="search-btn"><Search size={18} /></button>
-                            </div>
-                        </div>
-                        <div className="hero-footer-text">#Select a tag to view tools</div>
-
-                    </div>
-                </div>
-
-                {/* Chips Container - Moved out of hero-section for full width */}
-                <div className="w-full max-w-[1400px] mx-auto px-6 pb-20" style={{ maxWidth: '100%', paddingLeft: '2rem', paddingRight: '2rem' }}>
-                    <div className="filter-chip-container mt-0" style={{ maxWidth: '100%' }}>
-                        {selectedTags.length > 1 && (
-                            <div
-                                className="filter-chip selected"
-                                onClick={clearAllTags}
-                                style={{ backgroundColor: 'var(--destructive)', color: 'white', borderColor: 'transparent' }}
-                            >
-                                Clear All <X size={14} />
-                            </div>
-                        )}
-                        {visibleTags.map(tag => {
-                            const isSelected = selectedTags.includes(tag);
-                            return (
-                                <div
-                                    key={tag}
-                                    className={`filter-chip ${isSelected ? 'selected' : ''}`}
-                                    onClick={() => toggleTag(tag)}
-                                >
-                                    {tag}
-                                    {isSelected && <X size={14} />}
-                                </div>
-                            );
-                        })}
-                        {visibleTags.length === 0 && (
-                            <div className="text-muted-foreground text-sm text-center w-full">No tags found</div>
-                        )}
-                    </div>
                 </div>
             </div>
 
             <div className="content-overlay content-area pt-24">
+                <div className="hero-search-wrapper">
+                    {/* 1. Search Bar for Tags */}
+                    <div className="big-search-bar sticky top-4 z-50 bg-background/80 backdrop-blur-md shadow-sm mb-6 border border-white/10">
+                        <input
+                            type="text"
+                            placeholder="Search tags..."
+                            value={tagSearchQuery}
+                            onChange={(e) => setTagSearchQuery(e.target.value)}
+                        />
+                        <div className="search-actions">
+                            <span className="kbd">CTRL + K</span>
+                            <button className="search-btn"><Search size={18} /></button>
+                        </div>
+                    </div>
+                    <div className="hero-footer-text mb-4">#Select a tag to view tools</div>
+
+                    {/* Chips Container */}
+                    <div className="w-full max-w-[1400px] mx-auto px-6" style={{ maxWidth: '100%', paddingLeft: '1rem', paddingRight: '1rem' }}>
+                        <div className="filter-chip-container mt-0 justify-center flex flex-wrap gap-2" style={{ maxWidth: '100%' }}>
+                            {selectedTags.length > 1 && (
+                                <div
+                                    className="filter-chip selected"
+                                    onClick={clearAllTags}
+                                    style={{ backgroundColor: 'var(--destructive)', color: 'white', borderColor: 'transparent' }}
+                                >
+                                    Clear All <X size={14} />
+                                </div>
+                            )}
+                            {visibleTags.map(tag => {
+                                const isSelected = selectedTags.includes(tag);
+                                return (
+                                    <div
+                                        key={tag}
+                                        className={`filter-chip ${isSelected ? 'selected' : ''}`}
+                                        onClick={() => toggleTag(tag)}
+                                    >
+                                        {tag}
+                                        {isSelected && <X size={14} />}
+                                    </div>
+                                );
+                            })}
+                            {visibleTags.length === 0 && (
+                                <div className="text-muted-foreground text-sm text-center w-full">No tags found</div>
+                            )}
+                        </div>
+                    </div>
+
+                </div>
                 <div
                     ref={gridRef}
                     className="masonry-wrapper"

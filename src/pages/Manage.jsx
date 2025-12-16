@@ -3,7 +3,8 @@ import MagneticMorphingNav from '../components/MagneticMorphingNav';
 import Masonry from '../components/Masonry';
 import ProductForm from '../components/ProductForm';
 import { supabase } from '../supabase';
-import { Upload, Loader2, CheckCircle, Search, Trash2, Plus, X, IndianRupee, Settings, ArrowLeft, FileSpreadsheet, Download, Image as ImageIcon, AlertCircle } from 'lucide-react';
+import { Upload, Loader2, CheckCircle, Search, Trash2, Plus, X, IndianRupee, Settings, ArrowLeft, FileSpreadsheet, Download, Image as ImageIcon, AlertCircle, Users } from 'lucide-react';
+import UsersTable from '../components/comp-485';
 import { gsap } from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
 
@@ -281,9 +282,9 @@ const BulkUpload = ({ onComplete }) => {
 
 const Manage = ({ navigateOnly }) => {
     const gridRef = useRef(null);
-    const [activeTab, setActiveTab] = useState('manage'); // 'manage' or 'add'
+    const [activeTab, setActiveTab] = useState('add'); // Default to Add New as per order? Or keep 'manage'? User listed "add new card" first. Let's default to 'add'.
     const [addMode, setAddMode] = useState('single'); // 'single' | 'bulk'
-    
+
     // Manage List State
     const [products, setProducts] = useState([]);
     const [refreshTrigger, setRefreshTrigger] = useState(0);
@@ -334,7 +335,7 @@ const Manage = ({ navigateOnly }) => {
                     const { error: storageError } = await supabase.storage
                         .from('products')
                         .remove([imagePath]);
-                    
+
                     if (storageError) {
                         console.warn("Could not delete image from storage:", storageError);
 
@@ -354,8 +355,9 @@ const Manage = ({ navigateOnly }) => {
 
     const manageTabs = [
         { id: 'home', label: 'Home', icon: <ArrowLeft size={14} /> },
+        { id: 'add', label: 'Add New Card', icon: <Plus size={14} /> },
         { id: 'manage', label: 'Manage Cards', icon: <Search size={14} /> },
-        { id: 'add', label: 'Add New', icon: <Plus size={14} /> }
+        { id: 'users', label: 'Manage Users', icon: <Users size={14} /> }
     ];
 
     const handleTabChange = (id) => {
@@ -392,7 +394,7 @@ const Manage = ({ navigateOnly }) => {
 
                 <div className="max-w-[1200px] mx-auto px-5 w-full pt-10">
                     {/* Content Section */}
-                    {activeTab === 'manage' ? (
+                    {activeTab === 'manage' && (
                         <>
                             <div ref={gridRef} className="masonry-wrapper">
                                 <div className="flex items-center justify-between mb-6">
@@ -421,23 +423,25 @@ const Manage = ({ navigateOnly }) => {
                             {editingItem && (
                                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 overflow-y-auto">
                                     <div className="bg-card w-full max-w-6xl rounded-3xl p-8 lg:p-10 relative overflow-hidden my-auto border border-border shadow-2xl">
-                                        <button 
-                                            onClick={() => setEditingItem(null)} 
+                                        <button
+                                            onClick={() => setEditingItem(null)}
                                             className="absolute top-4 right-4 bg-muted hover:bg-destructive hover:text-white text-muted-foreground p-2 rounded-full transition-all z-20"
                                         >
                                             <X size={20} />
                                         </button>
-                                        <ProductForm 
-                                            initialData={editingItem} 
-                                            isEditMode={true} 
-                                            onSuccess={() => { setEditingItem(null); setRefreshTrigger(p => p+1); }}
+                                        <ProductForm
+                                            initialData={editingItem}
+                                            isEditMode={true}
+                                            onSuccess={() => { setEditingItem(null); setRefreshTrigger(p => p + 1); }}
                                             onCancel={() => setEditingItem(null)}
                                         />
                                     </div>
                                 </div>
                             )}
                         </>
-                    ) : (
+                    )}
+
+                    {activeTab === 'add' && (
                         /* ADD FORM STYLE - Forced Split View */
                         <div className="max-w-6xl mx-auto">
                             {/* Mode Toggle */}
@@ -465,6 +469,12 @@ const Manage = ({ navigateOnly }) => {
                                     <ProductForm onSuccess={() => { setActiveTab('manage'); setRefreshTrigger(p => p + 1); }} />
                                 )}
                             </div>
+                        </div>
+                    )}
+
+                    {activeTab === 'users' && (
+                        <div className="max-w-6xl mx-auto bg-card border border-border rounded-3xl p-8 shadow-xl">
+                            <UsersTable />
                         </div>
                     )}
                 </div>

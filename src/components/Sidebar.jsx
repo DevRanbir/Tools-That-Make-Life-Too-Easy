@@ -1,5 +1,5 @@
 import React, { useState, useId, useEffect } from 'react';
-import { Home, Search, Tag, Monitor, Ticket, Settings, Plus, Moon as MoonIcon, Sun as SunIcon, Heart, ShoppingBag, Calendar as CalendarIcon, Database, ListTodo, ChevronsLeft, ChevronsRight } from 'lucide-react';
+import { Home, Search, Tag, Monitor, Ticket, Settings, Plus, Moon as MoonIcon, Sun as SunIcon, Heart, ShoppingBag, Calendar as CalendarIcon, Database, ListTodo, ChevronsLeft, ChevronsRight, StickyNote } from 'lucide-react';
 import DesignedAtSymbol from './DesignedAtSymbol';
 
 const Switch = ({ checked, onCheckedChange, className, id, ...props }) => {
@@ -37,7 +37,11 @@ const Sidebar = ({
     rightSidebarMode,
     setRightSidebarMode,
     settingsTab,
-    setSettingsTab
+    setSettingsTab,
+    pinnedPages,
+    updatePinnedPages,
+    onOpenSearch,
+    updateSettingPreference
 }) => {
     const [isExpanded, setIsExpanded] = useState(false);
     const [isMobileHidden, setIsMobileHidden] = useState(false);
@@ -56,10 +60,8 @@ const Sidebar = ({
         const handleTouchEnd = (e) => {
             const touchEndX = e.changedTouches[0].screenX;
             const touchEndY = e.changedTouches[0].screenY;
-            
             const deltaX = touchEndX - touchStartX;
             const deltaY = touchEndY - touchStartY;
-            
             // Check if horizontal swipe is dominant (to avoid blocking vertical scroll)
             if (Math.abs(deltaX) > Math.abs(deltaY)) {
                 // Swipe threshold
@@ -100,6 +102,20 @@ const Sidebar = ({
         }
     }, [isSettingsOpen]);
 
+    // Tool Deck Preference
+    const toolDeckTab = user?.user_metadata?.setting_preferences?.tool_deck_tab || 'todos';
+
+    // Map preference to Icon and Label
+    const getToolDeckConfig = () => {
+        switch (toolDeckTab) {
+            case 'notes': return { icon: StickyNote, label: 'Tool Deck' };
+            case 'calendar': return { icon: CalendarIcon, label: 'Tool Deck' };
+            default: return { icon: ListTodo, label: 'Tool Deck' };
+        }
+    };
+
+    const toolDeckConfig = getToolDeckConfig();
+
     const menuItems = [
         { id: 'manual', icon: Home, label: 'Home' },
         { id: 'search', icon: Search, label: 'Search' },
@@ -107,8 +123,7 @@ const Sidebar = ({
         { id: 'shop', icon: ShoppingBag, label: 'Shop' },
         ...(user ? [
             { id: 'home', icon: Heart, label: 'For You' },
-            { id: 'todos', icon: ListTodo, label: 'Todos' },
-            { id: 'calendar', icon: CalendarIcon, label: 'Calendar' },
+            { id: toolDeckTab, icon: toolDeckConfig.icon, label: toolDeckConfig.label },
             { id: 'data', icon: Database, label: 'Data' },
             ...(user.user_metadata?.role === 'administrator' ? [{ id: 'manage', icon: Monitor, label: 'Manage' }] : []),
         ] : []),
@@ -120,6 +135,7 @@ const Sidebar = ({
 
     const handleCheckedChange = (checked) => {
         setDarkMode(!checked);
+        if (updateSettingPreference) updateSettingPreference('dark_mode', !checked);
     };
 
     return (
@@ -162,7 +178,13 @@ const Sidebar = ({
                         <div
                             key={item.id}
                             className={`sidebar-icon ${activePage === item.id ? 'active' : ''}`}
-                            onClick={() => setActivePage(item.id)}
+                            onClick={() => {
+                                if (item.id === 'search' && onOpenSearch) {
+                                    onOpenSearch();
+                                } else {
+                                    setActivePage(item.id);
+                                }
+                            }}
                         >
                             <item.icon size={22} className="min-w-[22px]" />
                             <span className="sidebar-text ml-3 text-sm font-medium whitespace-nowrap overflow-hidden">
@@ -185,6 +207,9 @@ const Sidebar = ({
                         setActivePage={setActivePage}
                         activeTab={settingsTab}
                         onTabChange={setSettingsTab}
+                        pinnedPages={pinnedPages}
+                        updatePinnedPages={updatePinnedPages}
+                        updateSettingPreference={updateSettingPreference}
                         trigger={
                             <div className={`sidebar-icon cursor-pointer`}>
                                 <Settings size={22} className="min-w-[22px]" />

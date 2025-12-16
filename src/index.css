@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@plugin "@tailwindcss/typography";
 /* Font imported in index.html */
 /* Geist Mono is likely not on Google Fonts, using monospace fallback */
 
@@ -996,7 +997,7 @@ input:checked+.slider:before {
   }
 
   .content-area {
-    padding-left: 0px;
+    padding-left: 5px;
     padding-right: 0px;
   }
 
@@ -1005,7 +1006,7 @@ input:checked+.slider:before {
     height: auto;
     flex-wrap: wrap;
     gap: 10px;
-    padding: 0 20px;
+    padding: 4px 20px;
   }
 
   .topbar-left {
@@ -1050,4 +1051,29 @@ input:checked+.slider:before {
   .sidebar {
     top: 53.5%;
   }
+}
+
+/* Custom Selection Color */
+::selection {
+  background-color: color-mix(in srgb, var(--destructive), transparent 50%);
+  color: inherit;
+}
+
+::-moz-selection {
+  background-color: color-mix(in srgb, var(--destructive), transparent 50%);
+  color: inherit;
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+.animate-shimmer {
+  animation: shimmer 5s linear infinite;
 }

@@ -2,17 +2,368 @@ import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '../supabase';
 import {
     File as FileIcon, FileText, Image, Music, Video, MoreVertical,
-    Trash2, Download, Grid, List, Search
+    Trash2, Download, Grid, List, Search, Folder, ChevronLeft, ChevronRight, Home, ChevronDown,
+    Archive, StickyNote, FileSpreadsheet, Code, FileCode, Info
 } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { filesize } from 'filesize';
 import { motion, AnimatePresence } from 'framer-motion';
+import { toast } from 'sonner';
+import { Drawer } from 'vaul';
+import { X } from 'lucide-react';
+import { RotateCw, Play, Pause, Eye, Code as CodeIcon } from 'lucide-react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
+import LoadingScreen from './LoadingScreen';
+import { BarVisualizer } from '@/components/ui/bar-visualizer';
+import * as XLSX from 'xlsx';
+import {
+    ScrubBarContainer,
+    ScrubBarTrack,
+    ScrubBarProgress,
+    ScrubBarThumb,
+    ScrubBarTimeLabel
+} from '@/components/ui/scrub-bar';
 
-const FileExplorer = ({ user, externalSearchQuery, onFileCountChange }) => {
+const EXTENSION_GROUPS = {
+    Images: ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'bmp', 'tiff'],
+    Videos: ['mp4', 'mov', 'avi', 'mkv', 'webm', 'flv', 'wmv'],
+    Audio: ['mp3', 'wav', 'ogg', 'm4a', 'flac'],
+    PDFs: ['pdf'],
+    Spreadsheets: ['xls', 'xlsx', 'csv', 'ods', 'numbers'],
+    Notes: ['txt', 'md', 'notes', 'json'], // JSON could be code, but user said notes for txt/md. I'll put JSON in Code.
+    Code: ['js', 'jsx', 'ts', 'tsx', 'py', 'java', 'cpp', 'c', 'h', 'json', 'html', 'css', 'php', 'rb', 'go', 'rs', 'swift'],
+    Archives: ['zip', 'rar', '7z', 'tar', 'gz', 'pkg', 'dmg'],
+    Documents: ['doc', 'docx', 'rtf', 'odt', 'ppt', 'pptx', 'pages', 'key'],
+};
+
+// Helper for consistent grouping logic
+// Notes: Re-evaluated JSON -> Code makes more sense for devs, but keeping mapping flexible.
+EXTENSION_GROUPS.Notes = ['txt', 'md', 'markdown']; // Overriding if I made a mistake above in thought process
+
+const AudioPreview = ({ previewUrl }) => {
+    const [isPlaying, setIsPlaying] = useState(false);
+    const [audioStream, setAudioStream] = useState(null);
+    const [duration, setDuration] = useState(0);
+    const [currentTime, setCurrentTime] = useState(0);
+    const audioRef = useRef(null);
+    const audioContextRef = useRef(null);
+    const sourceRef = useRef(null);
+
+    const togglePlay = async () => {
+        if (!audioRef.current) return;
+
+        if (isPlaying) {
+            audioRef.current.pause();
+            setIsPlaying(false);
+        } else {
+            // Context needs user interaction to start
+            if (!audioContextRef.current) {
+                const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+                audioContextRef.current = new AudioContextClass();
+            }
+
+            if (audioContextRef.current.state === 'suspended') {
+                await audioContextRef.current.resume();
+            }
+
+            // Create source if not exists
+            if (!sourceRef.current && audioRef.current) {
+                try {
+                    const src = audioContextRef.current.createMediaElementSource(audioRef.current);
+                    src.connect(audioContextRef.current.destination); // For hearing audio
+
+                    const dest = audioContextRef.current.createMediaStreamDestination();
+                    src.connect(dest);
+                    setAudioStream(dest.stream);
+                    sourceRef.current = src;
+                } catch (e) {
+                    console.error("Audio Setup Failed", e);
+                }
+            }
+
+            try {
+                await audioRef.current.play();
+                setIsPlaying(true);
+            } catch (e) {
+                console.error("Play failed", e);
+            }
+        }
+    };
+
+    // Ensure cleanup
+    useEffect(() => {
+        return () => {
+            if (audioContextRef.current) audioContextRef.current.close();
+        };
+    }, []);
+
+    const handleTimeUpdate = () => {
+        if (audioRef.current) {
+            setCurrentTime(audioRef.current.currentTime);
+        }
+    };
+
+    const handleLoadedMetadata = () => {
+        if (audioRef.current) {
+            setDuration(audioRef.current.duration);
+        }
+    };
+
+    const handleScrub = (value) => {
+        if (audioRef.current) {
+            audioRef.current.currentTime = value;
+            setCurrentTime(value);
+        }
+    };
+
+    return (
+        <div className="flex flex-col items-center justify-center gap-6 w-full max-w-2xl px-4">
+            <BarVisualizer
+                state={isPlaying ? "speaking" : "listening"}
+                barCount={20}
+                mediaStream={audioStream}
+                className="w-full h-48 bg-transparent"
+            />
+
+            {/* Scrub Bar */}
+            <div className="w-full flex items-center gap-4">
+                <ScrubBarTimeLabel time={currentTime} />
+                <ScrubBarContainer
+                    value={currentTime}
+                    duration={duration}
+                    onScrub={handleScrub}
+                    className="flex-1"
+                >
+                    <ScrubBarTrack className="h-2">
+                        <ScrubBarProgress />
+                        <ScrubBarThumb />
+                    </ScrubBarTrack>
+                </ScrubBarContainer>
+                <ScrubBarTimeLabel time={duration} />
+            </div>
+
+            <audio
+                ref={audioRef}
+                src={previewUrl}
+                onEnded={() => setIsPlaying(false)}
+                onTimeUpdate={handleTimeUpdate}
+                onLoadedMetadata={handleLoadedMetadata}
+                crossOrigin="anonymous"
+                className="hidden"
+            />
+
+            <button
+                onClick={togglePlay}
+                className="p-4 rounded-full bg-primary text-primary-foreground hover:bg-primary/90 transition-transform active:scale-95 shadow-lg"
+            >
+                {isPlaying ? <Pause size={32} fill="currentColor" /> : <Play size={32} fill="currentColor" className="ml-1" />}
+            </button>
+        </div>
+    );
+};
+
+
+
+const SpreadsheetPreview = ({ data }) => {
+    if (!data || data.length === 0) return <div className="text-muted-foreground p-4">Empty spreadsheet</div>;
+
+    const headers = data[0];
+    const rows = data.slice(1);
+
+    return (
+        <div className="w-full h-full overflow-auto bg-card text-card-foreground p-4">
+            <table className="w-full text-sm border-collapse">
+                <thead>
+                    <tr className="border-b border-border">
+                        {headers.map((header, i) => (
+                            <th key={i} className="text-left p-2 font-medium text-muted-foreground whitespace-nowrap bg-secondary/30 sticky top-0 z-10">
+                                {header}
+                            </th>
+                        ))}
+                    </tr>
+                </thead>
+                <tbody>
+                    {rows.map((row, i) => (
+                        <tr key={i} className="border-b border-border/50 hover:bg-secondary/20">
+                            {row.map((cell, j) => (
+                                <td key={j} className="p-2 whitespace-nowrap">
+                                    {cell !== null && cell !== undefined ? String(cell) : ''}
+                                </td>
+                            ))}
+                        </tr>
+                    ))}
+                </tbody>
+            </table>
+        </div>
+    );
+};
+
+// Helper to get folder icons for breadcrumb
+const getFolderIcon = (groupName) => {
+    switch (groupName) {
+        case 'Images': return <Image size={14} />;
+        case 'Videos': return <Video size={14} />;
+        case 'Audio': return <Music size={14} />;
+        case 'PDFs': return <FileText size={14} />;
+        case 'Documents': return <FileIcon size={14} />;
+        case 'Spreadsheets': return <FileSpreadsheet size={14} />;
+        case 'Code': return <Code size={14} />;
+        case 'Archives': return <Archive size={14} />;
+        case 'Notes': return <StickyNote size={14} />;
+        default: return <Folder size={14} />;
+    }
+};
+
+const FileExplorer = ({ user, externalSearchQuery, onFileCountChange, darkMode }) => {
     const [files, setFiles] = useState([]);
     const [loading, setLoading] = useState(true);
     const [viewMode, setViewMode] = useState('list'); // 'grid' or 'list'
     const [internalSearchQuery, setInternalSearchQuery] = useState('');
+    const [currentFolder, setCurrentFolder] = useState('root'); // 'root' or group name
+    const [selectedFile, setSelectedFile] = useState(null);
+    const [previewUrl, setPreviewUrl] = useState(null);
+    const [previewContent, setPreviewContent] = useState(null);
+    const [previewType, setPreviewType] = useState(null); // 'image', 'video', 'audio', 'pdf', 'text', 'code', 'other'
+    const [showInfo, setShowInfo] = useState(false);
+    const [loadingPreview, setLoadingPreview] = useState(false);
+    const [shouldRenderLoader, setShouldRenderLoader] = useState(false);
+    const [fileToDelete, setFileToDelete] = useState(null); // Name of file to delete
+    const [showSource, setShowSource] = useState(false); // Toggle between rendered and source for md/html
+    const [dropdownOpen, setDropdownOpen] = useState(false);
+    const dropdownRef = useRef(null);
+
+    // Close dropdown when clicking outside
+    useEffect(() => {
+        const handleClickOutside = (event) => {
+            if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+                setDropdownOpen(false);
+            }
+        };
+
+        if (dropdownOpen) {
+            document.addEventListener('mousedown', handleClickOutside);
+        }
+
+        return () => {
+            document.removeEventListener('mousedown', handleClickOutside);
+        };
+    }, [dropdownOpen]);
+
+
+    // Fetch preview when selectedFile changes
+    useEffect(() => {
+        setShowInfo(false); // Reset info view
+        setShowSource(false); // Reset source view on file change
+        if (!selectedFile) {
+            setPreviewUrl(null);
+            setPreviewContent(null);
+            setPreviewType(null);
+            return;
+        }
+
+
+
+        const fetchPreview = async () => {
+            setLoadingPreview(true);
+            const file = selectedFile;
+            const ext = file.name.split('.').pop().toLowerCase();
+            const path = `${user.id}/${file.name}`;
+
+            let type = 'other';
+            if (EXTENSION_GROUPS.Images.includes(ext)) type = 'image';
+            else if (EXTENSION_GROUPS.Videos.includes(ext)) type = 'video';
+            else if (EXTENSION_GROUPS.Audio.includes(ext)) type = 'audio';
+            else if (EXTENSION_GROUPS.PDFs.includes(ext)) type = 'pdf';
+            else if (EXTENSION_GROUPS.Spreadsheets.includes(ext)) type = 'spreadsheet';
+            else if (EXTENSION_GROUPS.Documents.includes(ext)) type = 'document';
+            else if (['md', 'markdown'].includes(ext)) type = 'markdown'; // Explicit check
+            else if (['html', 'htm'].includes(ext)) type = 'html'; // Explicit check
+            else if (EXTENSION_GROUPS.Code.includes(ext)) type = 'code';
+            else if (EXTENSION_GROUPS.Notes.includes(ext)) type = 'text';
+
+            setPreviewType(type);
+
+            try {
+                if (['image', 'video', 'audio', 'pdf', 'document'].includes(type)) { // Added document here for URL generation
+                    // Get Signed URL
+                    const { data, error } = await supabase.storage
+                        .from(BUCKET_NAME)
+                        .createSignedUrl(path, 3600); // 1 hour
+
+                    if (data?.signedUrl) {
+                        setPreviewUrl(data.signedUrl);
+                        // For documents (Word, PPT), PDFs, video, audio, we turn off loader once URL is ready.
+                        // Images handle their own loading state via onLoad in the render.
+                        // Video now handles its own loading state via onLoadedData in the render.
+                        if (type !== 'image' && type !== 'video') {
+                            setLoadingPreview(false);
+                        }
+                    } else {
+                        console.error('Error creating signed URL:', error);
+                        setLoadingPreview(false);
+                    }
+                } else if (['text', 'code', 'markdown', 'html'].includes(type)) {
+                    // Download content
+                    if (file.metadata?.size > 1024 * 1024) {
+                        setPreviewContent("File too large to preview.");
+                        setLoadingPreview(false);
+                        return;
+                    }
+
+                    const { data, error } = await supabase.storage
+                        .from(BUCKET_NAME)
+                        .download(path);
+
+                    if (data) {
+                        const text = await data.text();
+                        setPreviewContent(text);
+                    } else {
+                        setPreviewContent("Failed to load content.");
+                    }
+                    setLoadingPreview(false);
+                } else if (type === 'spreadsheet') {
+                    // Handle Spreadsheet
+                    const { data, error } = await supabase.storage
+                        .from(BUCKET_NAME)
+                        .download(path);
+
+                    if (data) {
+                        const arrayBuffer = await data.arrayBuffer();
+                        const workbook = XLSX.read(arrayBuffer, { type: 'array' });
+                        const sheetName = workbook.SheetNames[0];
+                        const worksheet = workbook.Sheets[sheetName];
+                        const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 }); // Header: 1 gives array of arrays
+                        setPreviewContent(jsonData);
+                    } else {
+                        console.error("Error dl spreadsheet", error);
+                        setPreviewContent(null);
+                    }
+                    setLoadingPreview(false);
+                } else {
+                    setLoadingPreview(false);
+                }
+
+            } catch (err) {
+                console.error("Preview fetch error:", err);
+                setLoadingPreview(false);
+            }
+        };
+
+        fetchPreview();
+    }, [selectedFile, user.id]);
+
+    useEffect(() => {
+        let timeout;
+        if (loadingPreview) {
+            setShouldRenderLoader(true);
+        } else {
+            timeout = setTimeout(() => {
+                setShouldRenderLoader(false);
+            }, 750); // Slightly longer than 700ms transition to be safe
+        }
+        return () => clearTimeout(timeout);
+    }, [loadingPreview]);
 
     // Use external query if provided, otherwise internal
     const searchQuery = externalSearchQuery !== undefined ? externalSearchQuery : internalSearchQuery;
@@ -52,7 +403,6 @@ const FileExplorer = ({ user, externalSearchQuery, onFileCountChange }) => {
                             .upload(`${user.id}/welcome.txt`, welcomeFile);
 
                         if (!uploadError) {
-                            // Manually object since re-fetching might be overkill for one file
                             const now = new Date().toISOString();
                             fileList = [{
                                 name: "welcome.txt",
@@ -78,28 +428,36 @@ const FileExplorer = ({ user, externalSearchQuery, onFileCountChange }) => {
         }
     };
 
-    const handleDelete = async (fileName) => {
+    const handleDelete = (fileName) => {
         if (fileName === 'welcome.txt') {
-            alert("The welcome file cannot be deleted.");
+            toast.error("The welcome file cannot be deleted.");
             return;
         }
+        setFileToDelete(fileName);
+    };
 
-        if (!confirm(`Are you sure you want to delete ${fileName}?`)) return;
+    const confirmDelete = async () => {
+        if (!fileToDelete) return;
 
         try {
             const { error } = await supabase.storage
                 .from(BUCKET_NAME)
-                .remove([`${user.id}/${fileName}`]);
+                .remove([`${user.id}/${fileToDelete}`]);
 
             if (error) {
-                alert(`Error deleting file: ${error.message}`);
+                toast.error(`Error deleting file: ${error.message}`);
             } else {
-                const newFiles = files.filter(f => f.name !== fileName);
+                const newFiles = files.filter(f => f.name !== fileToDelete);
                 setFiles(newFiles);
+                toast.success('File deleted successfully');
                 if (onFileCountChange) onFileCountChange(newFiles.length);
+                if (selectedFile?.name === fileToDelete) setSelectedFile(null);
             }
         } catch (err) {
             console.error("Delete error:", err);
+            toast.error("Failed to delete file");
+        } finally {
+            setFileToDelete(null);
         }
     };
 
@@ -126,16 +484,83 @@ const FileExplorer = ({ user, externalSearchQuery, onFileCountChange }) => {
     };
 
     const getFileIcon = (mimeType, fileName) => {
-        if (mimeType?.startsWith('image/') || fileName.match(/\.(jpg|jpeg|png|gif|webp)$/i)) return <Image className="text-blue-400" size={40} />;
-        if (mimeType?.startsWith('video/') || fileName.match(/\.(mp4|mov|avi)$/i)) return <Video className="text-red-400" size={40} />;
-        if (mimeType?.startsWith('audio/') || fileName.match(/\.(mp3|wav)$/i)) return <Music className="text-purple-400" size={40} />;
-        if (fileName.match(/\.pdf$/i)) return <FileText className="text-red-500" size={40} />;
+        const ext = fileName.split('.').pop().toLowerCase();
+
+        if (EXTENSION_GROUPS.Images.includes(ext) || mimeType?.startsWith('image/')) return <Image className="text-blue-400" size={40} />;
+        if (EXTENSION_GROUPS.Videos.includes(ext) || mimeType?.startsWith('video/')) return <Video className="text-red-400" size={40} />;
+        if (EXTENSION_GROUPS.Audio.includes(ext) || mimeType?.startsWith('audio/')) return <Music className="text-purple-400" size={40} />;
+
+        if (EXTENSION_GROUPS.PDFs.includes(ext)) return <FileText className="text-red-500" size={40} />;
+        if (EXTENSION_GROUPS.Spreadsheets.includes(ext)) return <FileSpreadsheet className="text-green-500" size={40} />;
+        if (EXTENSION_GROUPS.Code.includes(ext)) return <FileCode className="text-yellow-500" size={40} />;
+        if (EXTENSION_GROUPS.Archives.includes(ext)) return <Archive className="text-orange-400" size={40} />;
+        if (EXTENSION_GROUPS.Notes.includes(ext)) return <StickyNote className="text-yellow-200" size={40} />;
+        if (EXTENSION_GROUPS.Documents.includes(ext)) return <FileText className="text-blue-500" size={40} />;
+
         return <FileIcon className="text-gray-400" size={40} />;
     };
 
-    const filteredFiles = files.filter(f =>
-        f.name.toLowerCase().includes(searchQuery.toLowerCase())
-    );
+    // --- Grouping Logic ---
+    const getFileCategory = (file) => {
+        const name = file.name.toLowerCase();
+        const ext = name.split('.').pop();
+
+        if (EXTENSION_GROUPS.Images.includes(ext)) return 'Images';
+        if (EXTENSION_GROUPS.Videos.includes(ext)) return 'Videos';
+        if (EXTENSION_GROUPS.Audio.includes(ext)) return 'Audio';
+
+        if (EXTENSION_GROUPS.PDFs.includes(ext)) return 'PDFs';
+        if (EXTENSION_GROUPS.Spreadsheets.includes(ext)) return 'Spreadsheets';
+        if (EXTENSION_GROUPS.Code.includes(ext)) return 'Code';
+        if (EXTENSION_GROUPS.Archives.includes(ext)) return 'Archives';
+        if (EXTENSION_GROUPS.Notes.includes(ext)) return 'Notes';
+        if (EXTENSION_GROUPS.Documents.includes(ext)) return 'Documents';
+
+        return 'Others';
+    };
+
+    const groupedFiles = React.useMemo(() => {
+        const groups = {
+            Images: [],
+            Videos: [],
+            Audio: [],
+            PDFs: [],
+            Spreadsheets: [],
+            Code: [],
+            Archives: [],
+            Notes: [],
+            Documents: [],
+            Others: []
+        };
+        files.forEach(file => {
+            const category = getFileCategory(file);
+            // Map 'markdown' or specific html logic back to main groups for the folder view if needed
+            // For now, getFileCategory maps them to 'Notes' and 'Code' respectively in most cases, 
+            // OR we can leave them be. 
+            // Actually, getFileCategory uses EXTENSION_GROUPS. 
+            // Let's ensure EXTENSION_GROUPS.Notes includes md, and Code includes html.
+            // My previous logic in fetchPreview separates them for PREVIEW purpose.
+
+            if (groups[category]) {
+                groups[category].push(file);
+            } else {
+                groups.Others.push(file);
+            }
+        });
+        return groups;
+    }, [files]);
+
+    const activeFiles = currentFolder === 'root'
+        ? files
+        : groupedFiles[currentFolder] || [];
+
+    const isSearching = searchQuery.trim().length > 0;
+
+    const displayFiles = isSearching
+        ? files.filter(f => f.name.toLowerCase().includes(searchQuery.toLowerCase()))
+        : activeFiles;
+
+    const showingFolders = !isSearching && currentFolder === 'root';
 
     if (!user) {
         return <div className="text-center py-20 text-muted-foreground">Please log in to view your files.</div>;
@@ -144,13 +569,79 @@ const FileExplorer = ({ user, externalSearchQuery, onFileCountChange }) => {
     return (
         <div className="w-full max-w-[1400px] mx-auto p-6 min-h-[600px] bg-background/50 rounded-xl">
             {/* Toolbar */}
-            {/* Toolbar */}
             <div className="flex items-center justify-between mb-8">
                 <div className="flex items-center gap-4">
-                    <h2 className="text-xl font-semibold px-2">My Drive</h2>
+                    {isSearching ? (
+                        <h2 className="text-xl font-semibold px-2">Search Results</h2>
+                    ) : (
+                        /* Breadcrumb Navigation */
+                        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                            <button
+                                onClick={() => setCurrentFolder('root')}
+                                className={`flex items-center gap-1.5 transition-colors ${currentFolder === 'root' ? 'text-foreground font-medium' : 'hover:text-foreground'}`}
+                            >
+                                <Home size={16} />
+                                <span>My Drive</span>
+                            </button>
+
+                            {currentFolder !== 'root' && (
+                                <>
+                                    <ChevronRight size={14} />
+                                    <div className="relative" ref={dropdownRef}>
+                                        <button
+                                            onClick={() => setDropdownOpen(!dropdownOpen)}
+                                            className="flex items-center gap-2 text-foreground font-medium bg-card hover:bg-secondary border border-border px-3 py-1.5 rounded-lg transition-all"
+                                        >
+                                            {getFolderIcon(currentFolder)}
+                                            {currentFolder}
+                                            <ChevronDown size={14} className={`opacity-50 transition-transform ${dropdownOpen ? 'rotate-180' : ''}`} />
+                                        </button>
+
+                                        {/* Dropdown Menu */}
+                                        {dropdownOpen && (
+                                            <div className="absolute top-full left-0 mt-2 w-56 bg-card border border-border rounded-xl shadow-xl py-1 z-50 animate-in fade-in zoom-in-95 cursor-default">
+                                                <div className="max-h-96 overflow-y-auto p-1">
+                                                    {Object.keys(groupedFiles)
+                                                        .filter(group => groupedFiles[group].length > 0)
+                                                        .map(group => (
+                                                            <button
+                                                                key={group}
+                                                                onClick={() => {
+                                                                    setCurrentFolder(group);
+                                                                    setDropdownOpen(false);
+                                                                }}
+                                                                className={`w-full text-left px-3 py-2 text-sm flex items-center gap-3 rounded-lg transition-colors ${currentFolder === group ? 'bg-primary/10 text-primary font-medium' : 'text-foreground hover:bg-secondary'}`}
+                                                            >
+                                                                <span className={currentFolder === group ? 'text-primary' : 'text-muted-foreground'}>
+                                                                    {getFolderIcon(group)}
+                                                                </span>
+                                                                {group}
+                                                                {currentFolder === group && <div className="ml-auto w-1.5 h-1.5 rounded-full bg-primary" />}
+                                                            </button>
+                                                        ))}
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+                                </>
+                            )}
+                        </div>
+                    )}
                 </div>
 
+                
+
+
                 <div className="flex items-center gap-3">
+                    <button
+                        onClick={fetchFiles}
+                        className="p-2 rounded-full hover:bg-secondary text-muted-foreground hover:text-foreground transition-all"
+                        title="Refresh"
+                        disabled={loading}
+                    >
+                        <RotateCw size={20} className={loading ? "animate-spin" : ""} />
+                    </button>
+
                     {/* Show internal search only if external is NOT provided */}
                     {externalSearchQuery === undefined && (
                         <div className="relative flex-1 md:w-64">
@@ -164,20 +655,22 @@ const FileExplorer = ({ user, externalSearchQuery, onFileCountChange }) => {
                             />
                         </div>
                     )}
-                    <div className="flex bg-secondary/50 rounded-lg p-1 border border-border">
-                        <button
-                            onClick={() => setViewMode('grid')}
-                            className={`p-1.5 rounded-md transition-all ${viewMode === 'grid' ? 'bg-background shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
-                        >
-                            <Grid size={18} />
-                        </button>
-                        <button
-                            onClick={() => setViewMode('list')}
-                            className={`p-1.5 rounded-md transition-all ${viewMode === 'list' ? 'bg-background shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
-                        >
-                            <List size={18} />
-                        </button>
-                    </div>
+                    {!showingFolders && (
+                        <div className="flex bg-secondary/50 rounded-lg p-1 border border-border">
+                            <button
+                                onClick={() => setViewMode('grid')}
+                                className={`p-1.5 rounded-md transition-all ${viewMode === 'grid' ? 'bg-background shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
+                            >
+                                <Grid size={18} />
+                            </button>
+                            <button
+                                onClick={() => setViewMode('list')}
+                                className={`p-1.5 rounded-md transition-all ${viewMode === 'list' ? 'bg-background shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
+                            >
+                                <List size={18} />
+                            </button>
+                        </div>
+                    )}
                 </div>
             </div>
 
@@ -186,37 +679,82 @@ const FileExplorer = ({ user, externalSearchQuery, onFileCountChange }) => {
                 <div className="flex justify-center items-center h-64">
                     <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
                 </div>
-            ) : filteredFiles.length === 0 ? (
-                <div className="flex flex-col justify-center items-center h-64 text-muted-foreground border-2 border-dashed border-border/50 rounded-xl">
-                    <FileIcon size={48} className="mb-4 opacity-20" />
-                    <p>No files found</p>
+            ) : isSearching && displayFiles.length === 0 ? (
+                <div className="flex flex-col justify-center items-center h-64 text-muted-foreground">
+                    <Search size={48} className="mb-4 opacity-20" />
+                    <p>No files matching "{searchQuery}"</p>
+                </div>
+            ) : showingFolders ? (
+                // FOLDER VIEW
+                <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-6">
+                    {Object.entries(groupedFiles).map(([groupName, groupFiles]) => (
+                        <motion.div
+                            key={groupName}
+                            whileHover={{ scale: 1.02 }}
+                            whileTap={{ scale: 0.98 }}
+                            onClick={() => {
+                                if (groupedFiles[groupName]?.length > 0) {
+                                    setCurrentFolder(groupName);
+                                } else {
+                                    toast.error(`No files in ${groupName}`, {
+                                        description: "This folder is currently empty."
+                                    });
+                                }
+                            }}
+                            className="bg-card hover:bg-secondary/40 border border-border/50 hover:border-border rounded-xl p-6 flex flex-col items-center justify-center cursor-pointer transition-all aspect-square gap-4"
+                        >
+                            <div className={`p-4 rounded-full bg-secondary/30 ${groupFiles.length > 0 ? 'text-primary' : 'text-muted-foreground'}`}>
+                                {groupName === 'Images' && <Image size={32} />}
+                                {groupName === 'Videos' && <Video size={32} />}
+                                {groupName === 'Audio' && <Music size={32} />}
+                                {groupName === 'PDFs' && <FileText size={32} />}
+                                {groupName === 'Documents' && <FileIcon size={32} />}
+                                {groupName === 'Spreadsheets' && <FileSpreadsheet size={32} />}
+                                {groupName === 'Code' && <Code size={32} />}
+                                {groupName === 'Archives' && <Archive size={32} />}
+                                {groupName === 'Notes' && <StickyNote size={32} />}
+                                {groupName === 'Others' && <Folder size={32} />}
+                            </div>
+                            <div className="text-center">
+                                <h3 className="font-medium text-lg">{groupName}</h3>
+                                <p className="text-sm text-muted-foreground">{groupFiles.length} items</p>
+                            </div>
+                        </motion.div>
+                    ))}
                 </div>
             ) : (
+                // FILE VIEW (Grid/List)
                 <>
-                    {viewMode === 'grid' ? (
+                    {displayFiles.length === 0 ? (
+                        <div className="flex flex-col justify-center items-center h-64 text-muted-foreground border-2 border-dashed border-border/50 rounded-xl">
+                            <Folder size={48} className="mb-4 opacity-20" />
+                            <p>This folder is empty</p>
+                        </div>
+                    ) : viewMode === 'grid' ? (
                         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
                             <AnimatePresence>
-                                {filteredFiles.map((file) => (
+                                {displayFiles.map((file) => (
                                     <motion.div
                                         key={file.id}
                                         initial={{ opacity: 0, scale: 0.9 }}
                                         animate={{ opacity: 1, scale: 1 }}
                                         exit={{ opacity: 0, scale: 0.9 }}
                                         layout
-                                        className="group relative bg-card hover:bg-secondary/40 border border-border/50 hover:border-border rounded-xl p-4 flex flex-col items-center justify-between aspect-[4/5] transition-all"
+                                        onClick={() => setSelectedFile(file)}
+                                        className="group relative bg-card hover:bg-secondary/40 border border-border/50 hover:border-border rounded-xl p-4 flex flex-col items-center justify-between aspect-[4/5] transition-all cursor-pointer"
                                     >
-                                        <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                        <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity z-10">
                                             <div className="flex gap-1">
                                                 <button
-                                                    onClick={() => handleDownload(file.name)}
-                                                    className="p-1.5 bg-background/80 rounded-full hover:bg-background hover:text-primary shadow-sm"
+                                                    onClick={(e) => { e.stopPropagation(); handleDownload(file.name); }}
+                                                    className="p-1.5 bg-background/90 rounded-full hover:bg-background hover:text-primary shadow-sm"
                                                     title="Download"
                                                 >
                                                     <Download size={14} />
                                                 </button>
                                                 <button
-                                                    onClick={() => handleDelete(file.name)}
-                                                    className="p-1.5 bg-background/80 rounded-full hover:bg-background hover:text-destructive shadow-sm"
+                                                    onClick={(e) => { e.stopPropagation(); handleDelete(file.name); }}
+                                                    className="p-1.5 bg-background/90 rounded-full hover:bg-background hover:text-destructive shadow-sm"
                                                     title="Delete"
                                                 >
                                                     <Trash2 size={14} />
@@ -224,7 +762,14 @@ const FileExplorer = ({ user, externalSearchQuery, onFileCountChange }) => {
                                             </div>
                                         </div>
 
-                                        <div className="flex-1 flex items-center justify-center w-full">
+                                        {/* Extension Badge */}
+                                        <div className="absolute top-2 left-2 opacity-0 group-hover:opacity-100 transition-opacity z-10">
+                                            <span className="px-1.5 py-0.5 text-[10px] font-mono font-medium rounded-md bg-background/90 text-muted-foreground shadow-sm">
+                                                .{file.name.split('.').pop()}
+                                            </span>
+                                        </div>
+
+                                        <div className="flex-1 flex items-center justify-center w-full overflow-hidden">
                                             {/* Thumbnail or Icon */}
                                             <div className="p-4 rounded-2xl bg-secondary/30 group-hover:bg-secondary/50 transition-colors">
                                                 {getFileIcon(file.metadata?.mimetype, file.name)}
@@ -250,13 +795,14 @@ const FileExplorer = ({ user, externalSearchQuery, onFileCountChange }) => {
                                 <div className="w-32 text-right">Actions</div>
                             </div>
                             <AnimatePresence>
-                                {filteredFiles.map((file) => (
+                                {displayFiles.map((file) => (
                                     <motion.div
                                         key={file.id}
                                         initial={{ opacity: 0, y: 10 }}
                                         animate={{ opacity: 1, y: 0 }}
                                         exit={{ opacity: 0 }}
-                                        className="group grid grid-cols-[1fr_auto_auto] gap-4 items-center px-4 py-3 bg-card hover:bg-secondary/40 border border-transparent hover:border-border/50 rounded-lg transition-colors"
+                                        onClick={() => setSelectedFile(file)}
+                                        className="group grid grid-cols-[1fr_auto_auto] gap-4 items-center px-4 py-3 bg-card hover:bg-secondary/40 border border-transparent hover:border-border/50 rounded-lg transition-colors cursor-pointer"
                                     >
                                         <div className="flex items-center gap-3 overflow-hidden">
                                             <div className="shrink-0 scale-75">
@@ -269,14 +815,16 @@ const FileExplorer = ({ user, externalSearchQuery, onFileCountChange }) => {
                                         </div>
                                         <div className="w-32 flex justify-end gap-2">
                                             <button
-                                                onClick={() => handleDownload(file.name)}
+                                                onClick={(e) => { e.stopPropagation(); handleDownload(file.name); }}
                                                 className="p-1.5 hover:bg-background rounded-md text-foreground/70 hover:text-foreground transition-colors"
+                                                title="Download"
                                             >
                                                 <Download size={16} />
                                             </button>
                                             <button
-                                                onClick={() => handleDelete(file.name)}
+                                                onClick={(e) => { e.stopPropagation(); handleDelete(file.name); }}
                                                 className="p-1.5 hover:bg-background rounded-md text-foreground/70 hover:text-destructive transition-colors"
+                                                title="Delete"
                                             >
                                                 <Trash2 size={16} />
                                             </button>
@@ -288,6 +836,250 @@ const FileExplorer = ({ user, externalSearchQuery, onFileCountChange }) => {
                     )}
                 </>
             )}
+            {/* Delete Confirmation Modal */}
+            <AnimatePresence>
+                {fileToDelete && (
+                    <div className="fixed inset-0 z-[300] flex items-center justify-center p-4">
+                        <motion.div
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            onClick={() => setFileToDelete(null)}
+                            className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+                        />
+                        <motion.div
+                            initial={{ opacity: 0, scale: 0.95, y: 10 }}
+                            animate={{ opacity: 1, scale: 1, y: 0 }}
+                            exit={{ opacity: 0, scale: 0.95, y: 10 }}
+                            className="relative bg-card border border-border w-full max-w-sm rounded-xl p-6 shadow-2xl flex flex-col gap-4"
+                        >
+                            <div className="flex flex-col gap-2 text-center items-center">
+                                <div className="p-3 bg-destructive/10 text-destructive rounded-full mb-2">
+                                    <Trash2 size={24} />
+                                </div>
+                                <h3 className="text-lg font-semibold text-foreground">Delete File?</h3>
+                                <p className="text-sm text-muted-foreground">
+                                    Are you sure you want to delete <span className="font-medium text-foreground">"{fileToDelete}"</span>? This action cannot be undone.
+                                </p>
+                            </div>
+                            <div className="flex gap-3 mt-2">
+                                <button
+                                    onClick={() => setFileToDelete(null)}
+                                    className="flex-1 px-4 py-2 rounded-lg bg-secondary text-secondary-foreground font-medium hover:bg-secondary/80 transition-colors"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    onClick={confirmDelete}
+                                    className="flex-1 px-4 py-2 rounded-lg bg-destructive text-destructive-foreground font-medium hover:bg-destructive/90 transition-colors"
+                                >
+                                    Delete
+                                </button>
+                            </div>
+                        </motion.div>
+                    </div>
+                )}
+            </AnimatePresence>
+
+            {/* File Drawer */}
+            <Drawer.Root open={!!selectedFile} onOpenChange={(open) => !open && setSelectedFile(null)}>
+                <Drawer.Portal>
+                    <Drawer.Overlay className="fixed inset-0 bg-black/40 backdrop-blur-sm z-[200]" />
+                    <Drawer.Content className="bg-background flex flex-col rounded-t-[20px] h-[90vh] mt-24 fixed bottom-0 inset-x-0 mx-auto w-full max-w-4xl z-[200] border-t border-border outline-none shadow-2xl">
+                        <div className="sr-only">
+                            <Drawer.Title>{selectedFile?.name}</Drawer.Title>
+                            <Drawer.Description>File details and preview</Drawer.Description>
+                        </div>
+
+                        {/* Top Bar with Actions (Relative, solid background) */}
+                        <div className="flex items-center justify-between p-4 bg-background/95 backdrop-blur border-b border-border z-50 rounded-t-[20px]">
+                            {/* Handle visually */}
+                            <div className="absolute top-2 left-1/2 -translate-x-1/2 w-12 h-1.5 rounded-full bg-muted-foreground/20" />
+
+                            <div className="mt-2 text-left min-w-0">
+                                <h2 className="text-foreground font-semibold truncate max-w-[200px] sm:max-w-md text-base">
+                                    {selectedFile?.name}
+                                </h2>
+                            </div>
+                            <div className="flex items-center gap-2 mt-2">
+                                {/* Toggle Source/Render Button for MD/HTML */}
+                                {(previewType === 'markdown' || previewType === 'html') && (
+                                    <button
+                                        onClick={() => setShowSource(!showSource)}
+                                        className={`p-2 rounded-lg transition-all ${showSource ? 'bg-primary text-primary-foreground' : 'bg-secondary text-secondary-foreground hover:bg-secondary/80'}`}
+                                        title={showSource ? "Show Preview" : "Show Source"}
+                                    >
+                                        {showSource ? <Eye size={18} /> : <CodeIcon size={18} />}
+                                    </button>
+                                )}
+
+                                <button
+                                    onClick={() => setShowInfo(!showInfo)}
+                                    className={`p-2 rounded-lg transition-all ${showInfo ? 'bg-primary text-primary-foreground' : 'bg-secondary text-secondary-foreground hover:bg-secondary/80'}`}
+                                    title="File Info"
+                                >
+                                    <Info size={18} />
+                                </button>
+                                <button
+                                    onClick={() => handleDownload(selectedFile.name)}
+                                    className="p-2 rounded-lg bg-secondary text-secondary-foreground hover:bg-secondary/80 transition-all box-border"
+                                    title="Download"
+                                >
+                                    <Download size={18} />
+                                </button>
+                                <button
+                                    onClick={() => {
+                                        const fileName = selectedFile.name;
+                                        setSelectedFile(null);
+                                        setTimeout(() => handleDelete(fileName), 300);
+                                    }}
+                                    className="p-2 rounded-lg bg-destructive/10 text-destructive hover:bg-destructive/20 transition-all box-border"
+                                    title="Delete"
+                                >
+                                    <Trash2 size={18} />
+                                </button>
+                                <button
+                                    onClick={() => setSelectedFile(null)}
+                                    className="p-2 rounded-lg hover:bg-secondary transition-all text-muted-foreground hover:text-foreground"
+                                    title="Close"
+                                >
+                                    <X size={18} />
+                                </button>
+                            </div>
+                        </div>
+
+                        {/* Main Content Area */}
+                        <div className="flex-1 relative w-full h-full overflow-hidden bg-background flex items-center justify-center">
+                            {/* Loader Overlay */}
+                            {shouldRenderLoader && (
+                                <div className="absolute inset-0 z-[60] pointer-events-none">
+                                    <LoadingScreen
+                                        darkMode={darkMode}
+                                        fadeOut={!loadingPreview}
+                                        isGlobal={false}
+                                    />
+                                </div>
+                            )}
+
+                            {selectedFile && (
+                                <>
+                                    {previewType === 'image' && previewUrl ? (
+                                        <div className="w-full h-full flex items-center justify-center p-4 sm:p-8 bg-muted/20">
+                                            <img
+                                                src={previewUrl}
+                                                alt={selectedFile.name}
+                                                onLoad={() => setLoadingPreview(false)}
+                                                onError={() => setLoadingPreview(false)}
+                                                className={`max-w-full max-h-full object-contain drop-shadow-sm transition-opacity duration-700 ${loadingPreview ? 'opacity-0' : 'opacity-100'}`}
+                                            />
+                                        </div>
+                                    ) : previewType === 'video' && previewUrl ? (
+                                        <div className="w-full h-full flex items-center justify-center bg-black">
+                                            <video
+                                                src={previewUrl}
+                                                controls
+                                                className="max-w-full max-h-full"
+                                                onLoadedData={() => setLoadingPreview(false)}
+                                            />
+                                        </div>
+                                    ) : previewType === 'audio' && previewUrl ? (
+                                        <div className="flex flex-col items-center justify-center w-full h-full bg-muted/20">
+                                            <AudioPreview previewUrl={previewUrl} />
+                                        </div>
+                                    ) : previewType === 'pdf' && previewUrl ? (
+                                        <iframe src={previewUrl} className="w-full h-full border-0 outline-none bg-transparent" title="PDF Preview" />
+                                    ) : previewType === 'document' && previewUrl ? (
+                                        <iframe
+                                            src={`https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(previewUrl)}`}
+                                            className="w-full h-full border-0 outline-none bg-transparent"
+                                            title="Document Preview"
+                                        />
+                                    ) : previewType === 'spreadsheet' && previewContent ? (
+                                        <SpreadsheetPreview data={previewContent} />
+                                    ) : previewType === 'markdown' && previewContent !== null ? (
+                                        <div className="w-full h-full overflow-auto bg-background text-foreground p-4 sm:p-8">
+                                            {showSource ? (
+                                                <pre className="font-mono text-sm leading-relaxed whitespace-pre-wrap break-words max-w-4xl mx-auto bg-muted/30 p-4 rounded-lg">
+                                                    {previewContent}
+                                                </pre>
+                                            ) : (
+                                                /* Enhanced GitHub-like Markdown Container */
+                                                <div className="prose prose-sm md:prose-base dark:prose-invert max-w-4xl mx-auto prose-headings:font-semibold prose-a:text-blue-500 hover:prose-a:underline prose-pre:bg-muted prose-pre:border prose-pre:border-border">
+                                                    <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                                                        {previewContent}
+                                                    </ReactMarkdown>
+                                                </div>
+                                            )}
+                                        </div>
+                                    ) : previewType === 'html' && previewContent !== null ? (
+                                        <div className="w-full h-full overflow-hidden bg-background">
+                                            {showSource ? (
+                                                <div className="w-full h-full overflow-auto p-4 sm:p-8">
+                                                    <pre className="font-mono text-sm leading-relaxed whitespace-pre-wrap break-words max-w-4xl mx-auto bg-muted/30 p-4 rounded-lg text-foreground">
+                                                        {previewContent}
+                                                    </pre>
+                                                </div>
+                                            ) : (
+                                                <iframe
+                                                    srcDoc={previewContent}
+                                                    className="w-full h-full border-0 outline-none bg-white"
+                                                    title="HTML Preview"
+                                                />
+                                            )}
+                                        </div>
+                                    ) : (previewType === 'text' || previewType === 'code') && previewContent !== null ? (
+                                        <div className="w-full h-full overflow-auto bg-muted/30 text-foreground p-4 sm:p-8">
+                                            <pre className="font-mono text-sm leading-relaxed whitespace-pre-wrap break-words max-w-4xl mx-auto">
+                                                {previewContent}
+                                            </pre>
+                                        </div>
+                                    ) : (
+                                        /* Fallback */
+                                        <div className="flex flex-col items-center gap-6 text-muted-foreground opacity-50">
+                                            {(() => {
+                                                const ext = selectedFile.name.split('.').pop().toLowerCase();
+                                                if (EXTENSION_GROUPS.Spreadsheets.includes(ext)) return <FileSpreadsheet size={80} />;
+                                                if (EXTENSION_GROUPS.Archives.includes(ext)) return <Archive size={80} />;
+                                                return <FileIcon size={80} />;
+                                            })()}
+                                            <p className="text-lg font-medium">No Preview Available</p>
+                                        </div>
+                                    )}
+
+                                    {/* Info Overlay Panel */}
+                                    {showInfo && (
+                                        <div className="absolute top-4 right-4 w-72 md:w-80 bg-card border border-border rounded-xl p-4 shadow-xl z-50 animate-in fade-in slide-in-from-top-4 zoom-in-95">
+                                            <h3 className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-4 border-b border-border pb-2">Details</h3>
+                                            <div className="space-y-3 text-sm">
+                                                <div className="flex justify-between">
+                                                    <span className="text-muted-foreground">Type</span>
+                                                    <span className="text-foreground font-mono text-xs">{selectedFile.metadata?.mimetype || 'Unknown'}</span>
+                                                </div>
+                                                <div className="flex justify-between">
+                                                    <span className="text-muted-foreground">Size</span>
+                                                    <span className="text-foreground">{filesize(selectedFile.metadata?.size || 0)}</span>
+                                                </div>
+                                                <div className="flex justify-between">
+                                                    <span className="text-muted-foreground">Uploaded</span>
+                                                    <span className="text-foreground text-xs text-right">
+                                                        {new Date(selectedFile.created_at).toLocaleString()}
+                                                    </span>
+                                                </div>
+                                                <div className="pt-2">
+                                                    <span className="text-muted-foreground block mb-1">Path</span>
+                                                    <code className="block bg-muted p-2 rounded text-xs text-foreground break-all select-all border border-border">
+                                                        {user.id}/{selectedFile.name}
+                                                    </code>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    )}
+                                </>
+                            )}
+                        </div>
+                    </Drawer.Content>
+                </Drawer.Portal>
+            </Drawer.Root>
         </div>
     );
 };

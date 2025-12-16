@@ -1,7 +1,9 @@
-"use client";;
-import { RiCalendarLine, RiDeleteBinLine } from "@remixicon/react";
-import { format, isBefore } from "date-fns";
-import { useCallback, useEffect, useMemo, useState } from "react";
+"use client";
+import { RiDeleteBinLine } from "@remixicon/react";
+import { ClockIcon, CalendarIcon } from "lucide-react";
+import { format, isBefore, startOfDay } from "date-fns";
+import { useCallback, useEffect, useMemo, useState, useId } from "react";
+import { toast } from "sonner";
 
 import {
   DefaultEndHour,
@@ -29,14 +31,118 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+
+function DateTimePicker({ date, setDate, time, setTime, label, minDate }) {
+  const id = useId();
+  const [isOpen, setIsOpen] = useState(false);
+
+  // Handle time change from "HH:mm" input
+  const handleTimeChange = (e) => {
+    setTime(e.target.value);
+  };
+
+  // Validate time on blur to prevent past times
+  const handleTimeBlur = () => {
+    if (minTimeValue && time < minTimeValue) {
+      toast.error("You cannot select a past time!");
+      setTime(minTimeValue);
+    }
+  };
+
+  const handleDateSelect = (newDate) => {
+    if (newDate) {
+      setDate(newDate);
+    }
+  };
+
+  // Safe formatting for time display
+  const formattedTime = useMemo(() => {
+    if (!time) return "";
+    try {
+      const [h, m] = time.split(':');
+      const d = new Date();
+      d.setHours(parseInt(h), parseInt(m));
+      return format(d, 'h:mm a');
+    } catch (e) {
+      return time;
+    }
+  }, [time]);
+
+  // Calculate minimum time if selected date is same as minDate (e.g. today)
+  const minTimeValue = useMemo(() => {
+    if (!date || !minDate) return undefined;
+    if (format(date, 'yyyy-MM-dd') === format(minDate, 'yyyy-MM-dd')) {
+      return format(minDate, 'HH:mm');
+    }
+    return undefined;
+  }, [date, minDate]);
+
+  return (
+    <div className="space-y-1.5">
+      <Label htmlFor={id}>{label}</Label>
+      <Popover open={isOpen} onOpenChange={setIsOpen}>
+        <PopoverTrigger asChild>
+          <Button
+            id={id}
+            variant={"outline"}
+            className={cn(
+              "w-full justify-start text-left font-normal",
+              !date && "text-muted-foreground"
+            )}
+          >
+            <CalendarIcon className="mr-2 h-4 w-4" />
+            {date ? (
+              <span>
+                {format(date, "PPP")}
+                {formattedTime && (
+                  <span className="ml-2 text-muted-foreground border-l pl-2">
+                    {formattedTime}
+                  </span>
+                )}
+              </span>
+            ) : (
+              <span>Pick a date</span>
+            )}
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent className="w-auto p-0" align="start">
+          <div className="rounded-md border-0 bg-background">
+            <Calendar
+              className="p-2"
+              mode="single"
+              onSelect={handleDateSelect}
+              selected={date}
+              disabled={(d) => minDate ? isBefore(d, startOfDay(minDate)) : false}
+            />
+            <div className="border-t p-3">
+              <div className="flex items-center gap-3">
+                <Label className="text-xs" htmlFor={`time-${id}`}>
+                  Time
+                </Label>
+                <div className="relative grow">
+                  <Input
+                    className="peer appearance-none ps-9 [&::-webkit-calendar-picker-indicator]:hidden [&::-webkit-calendar-picker-indicator]:appearance-none"
+                    value={time}
+                    onChange={handleTimeChange}
+                    onBlur={handleTimeBlur}
+                    id={`time-${id}`}
+                    step="60"
+                    type="time"
+                    min={minTimeValue}
+                  />
+                  <div className="pointer-events-none absolute inset-y-0 start-0 flex items-center justify-center ps-3 text-muted-foreground/80 peer-disabled:opacity-50">
+                    <ClockIcon aria-hidden="true" size={16} />
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </PopoverContent>
+      </Popover>
+    </div>
+  );
+}
 
 export function EventDialog({
   event,
@@ -121,6 +227,31 @@ export function EventDialog({
   }, []); // Empty dependency array ensures this only runs once
 
   const handleSave = () => {
+    // 1. Validate Required Fields
+    if (!title.trim()) {
+      setError("Title is required");
+      toast.error("Please enter an event title");
+      return;
+    }
+
+    if (!startDate || !endDate) {
+      setError("Start and End dates are required");
+      toast.error("Please select start and end dates");
+      return;
+    }
+
+    if (!allDay && (!startTime || !endTime)) {
+      setError("Start and End times are required");
+      toast.error("Please select start and end times");
+      return;
+    }
+
+    if (!color) {
+      setError("Color etiquette is required");
+      toast.error("Please select a color");
+      return;
+    }
+
     const start = new Date(startDate);
     const end = new Date(endDate);
 
@@ -153,9 +284,6 @@ export function EventDialog({
       return;
     }
 
-    // Use generic title if empty
-    const eventTitle = title.trim() ? title : "(no title)";
-
     onSave({
       allDay,
       color,
@@ -164,7 +292,7 @@ export function EventDialog({
       id: event?.id || "",
       location,
       start,
-      title: eventTitle,
+      title: title.trim(),
     });
   };
 
@@ -246,121 +374,28 @@ export function EventDialog({
               value={description} />
           </div>
 
-          <div className="flex gap-4">
-            <div className="flex-1 *:not-first:mt-1.5">
-              <Label htmlFor="start-date">Start Date</Label>
-              <Popover onOpenChange={setStartDateOpen} open={startDateOpen}>
-                <PopoverTrigger asChild>
-                  <Button
-                    className={cn(
-                      "group w-full justify-between border-input bg-background px-3 font-normal outline-none outline-offset-0 hover:bg-background focus-visible:outline-[3px]",
-                      !startDate && "text-muted-foreground"
-                    )}
-                    id="start-date"
-                    variant={"outline"}>
-                    <span className={cn("truncate", !startDate && "text-muted-foreground")}>
-                      {startDate ? format(startDate, "PPP") : "Pick a date"}
-                    </span>
-                    <RiCalendarLine
-                      aria-hidden="true"
-                      className="shrink-0 text-muted-foreground/80"
-                      size={16} />
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent align="start" className="w-auto p-2">
-                  <Calendar
-                    defaultMonth={startDate}
-                    mode="single"
-                    onSelect={(date) => {
-                      if (date) {
-                        setStartDate(date);
-                        // If end date is before the new start date, update it to match the start date
-                        if (isBefore(endDate, date)) {
-                          setEndDate(date);
-                        }
-                        setError(null);
-                        setStartDateOpen(false);
-                      }
-                    }}
-                    selected={startDate} />
-                </PopoverContent>
-              </Popover>
+          <div className="flex flex-col sm:flex-row gap-4">
+            <div className="flex-1">
+              <DateTimePicker
+                label="Start Date"
+                date={startDate}
+                setDate={setStartDate}
+                time={startTime}
+                setTime={setStartTime}
+                minDate={new Date()}
+              />
             </div>
 
-            {!allDay && (
-              <div className="min-w-28 *:not-first:mt-1.5">
-                <Label htmlFor="start-time">Start Time</Label>
-                <Select onValueChange={setStartTime} value={startTime}>
-                  <SelectTrigger id="start-time">
-                    <SelectValue placeholder="Select time" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {timeOptions.map((option) => (
-                      <SelectItem key={option.value} value={option.value}>
-                        {option.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
-          </div>
-
-          <div className="flex gap-4">
-            <div className="flex-1 *:not-first:mt-1.5">
-              <Label htmlFor="end-date">End Date</Label>
-              <Popover onOpenChange={setEndDateOpen} open={endDateOpen}>
-                <PopoverTrigger asChild>
-                  <Button
-                    className={cn(
-                      "group w-full justify-between border-input bg-background px-3 font-normal outline-none outline-offset-0 hover:bg-background focus-visible:outline-[3px]",
-                      !endDate && "text-muted-foreground"
-                    )}
-                    id="end-date"
-                    variant={"outline"}>
-                    <span className={cn("truncate", !endDate && "text-muted-foreground")}>
-                      {endDate ? format(endDate, "PPP") : "Pick a date"}
-                    </span>
-                    <RiCalendarLine
-                      aria-hidden="true"
-                      className="shrink-0 text-muted-foreground/80"
-                      size={16} />
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent align="start" className="w-auto p-2">
-                  <Calendar
-                    defaultMonth={endDate}
-                    disabled={{ before: startDate }}
-                    mode="single"
-                    onSelect={(date) => {
-                      if (date) {
-                        setEndDate(date);
-                        setError(null);
-                        setEndDateOpen(false);
-                      }
-                    }}
-                    selected={endDate} />
-                </PopoverContent>
-              </Popover>
+            <div className="flex-1">
+              <DateTimePicker
+                label="End Date"
+                date={endDate}
+                setDate={setEndDate}
+                time={endTime}
+                setTime={setEndTime}
+                minDate={startDate}
+              />
             </div>
-
-            {!allDay && (
-              <div className="min-w-28 *:not-first:mt-1.5">
-                <Label htmlFor="end-time">End Time</Label>
-                <Select onValueChange={setEndTime} value={endTime}>
-                  <SelectTrigger id="end-time">
-                    <SelectValue placeholder="Select time" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {timeOptions.map((option) => (
-                      <SelectItem key={option.value} value={option.value}>
-                        {option.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
           </div>
 
           <div className="flex items-center gap-2">

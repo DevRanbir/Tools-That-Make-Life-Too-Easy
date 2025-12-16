@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { Bookmark, Settings } from 'lucide-react';
+import { Bookmark, Settings, Home, Search, ShoppingBag, ListTodo, Calendar as CalendarIcon, Tag, Zap, Database, Monitor } from 'lucide-react';
 import { supabase } from '../supabase';
 
-const RightSidebar = ({ user, isSettingsOpen, mode = 'full', setActivePage, todos = [], completeNextSubtask }) => {
+const RightSidebar = ({ user, isSettingsOpen, mode = 'full', setActivePage, todos = [], completeNextSubtask, pinnedPages = [], onOpenSearch }) => {
     const [isExpanded, setIsExpanded] = useState(false);
     const [bookmarks, setBookmarks] = useState([]);
 
@@ -44,9 +44,16 @@ const RightSidebar = ({ user, isSettingsOpen, mode = 'full', setActivePage, todo
                 })
                 .subscribe();
 
+            // Listen for local event updates (Custom Event)
+            const handleLocalEventUpdate = () => {
+                fetchEvents();
+            };
+            window.addEventListener('events-updated', handleLocalEventUpdate);
+
             return () => {
                 supabase.removeChannel(subscription);
                 supabase.removeChannel(eventsSubscription);
+                window.removeEventListener('events-updated', handleLocalEventUpdate);
             };
         } else {
             setBookmarks([]);
@@ -174,8 +181,13 @@ const RightSidebar = ({ user, isSettingsOpen, mode = 'full', setActivePage, todo
         setIsExpanded(false);
     };
 
+    const effectivePinnedPages = [...pinnedPages];
+    if (isAdministrator && !effectivePinnedPages.includes('manage')) {
+        effectivePinnedPages.unshift('manage');
+    }
+
     const isVisible = user && mode !== 'hidden' && (
-        (mode === 'full' && (bookmarks.length > 0 || ongoingEvents.length > 0 || upcomingEvents.length > 0 || isAdministrator)) ||
+        (mode === 'full' && (bookmarks.length > 0 || ongoingEvents.length > 0 || upcomingEvents.length > 0 || effectivePinnedPages.length > 0)) ||
         (mode === 'saved' && (bookmarks.length > 0 || isAdministrator)) ||
         (mode === 'events' && (ongoingEvents.length > 0 || upcomingEvents.length > 0 || isAdministrator))
     );
@@ -217,29 +229,66 @@ const RightSidebar = ({ user, isSettingsOpen, mode = 'full', setActivePage, todo
             onMouseLeave={handleMouseLeave}
         >
             {/* ADMIN SECTION */}
-            {isAdministrator && (
+
+
+            {/* PINNED PAGES SECTION */}
+            {user && (mode === 'full') && effectivePinnedPages.length > 0 && (
                 <>
                     <div className={`w-full flex flex-col mb-[2px] transition-all duration-300 items-end pr-[10px] ${isExpanded ? 'pl-[20px]' : ''}`}>
                         <span className={`text-[10px] font-bold tracking-wider text-right transition-opacity duration-300 ${isExpanded ? 'opacity-100' : 'opacity-60'}`}>
-                            ADMIN
+                            PINNED
                         </span>
                     </div>
 
                     <div className="flex flex-col gap-[2px] w-full mb-4">
-                        <div
-                            className={`group w-full h-[48px] flex items-center justify-end pr-[10px] ${isExpanded ? 'pl-[20px]' : ''} text-muted-foreground cursor-pointer relative transition-all duration-200 hover:text-foreground hover:opacity-100 opacity-60`}
-                            onClick={() => setActivePage('manage')}
-                        >
-                            <span
-                                className={`text-sm font-medium whitespace-nowrap overflow-hidden mr-3 transition-all duration-300 ease-in-out ${isExpanded ? 'opacity-100 max-w-[200px] pointer-events-auto' : 'opacity-0 max-w-0 pointer-events-none'}`}
-                            >
-                                Manage Page
-                            </span>
+                        {effectivePinnedPages.map(pageId => {
+                            let icon = Home;
+                            let label = 'Page';
 
-                            <div className="min-w-[40px] w-[40px] h-[40px] flex items-center justify-center rounded-xl overflow-hidden bg-background border border-border group-hover:scale-105 transition-transform duration-200 shadow-sm">
-                                <Settings size={20} />
-                            </div>
-                        </div>
+                            switch (pageId) {
+                                case 'manage': icon = Monitor; label = 'Manage'; break;
+                                case 'home': icon = Home; label = 'For You'; break;
+                                case 'manual': icon = Home; label = 'Home'; break; // Sidebar uses Home icon for Manual too? No, logic varies.
+                                case 'search': icon = Search; label = 'Search'; break;
+                                case 'shop': icon = ShoppingBag; label = 'Shop'; break;
+                                case 'todos': icon = ListTodo; label = 'Todos'; break;
+                                case 'calendar': icon = CalendarIcon; label = 'Calendar'; break;
+                                case 'tags': icon = Tag; label = 'Tags'; break;
+                                case 'fastmode': icon = Zap; label = 'Fast Mode'; break;
+                                case 'data': icon = Database; label = 'Data'; break;
+                                default: return null;
+                            }
+
+                            const IconComp = icon;
+
+                            return (
+                                <div
+                                    key={pageId}
+                                    className={`group w-full h-[48px] flex items-center justify-end pr-[10px] ${isExpanded ? 'pl-[20px]' : ''} text-muted-foreground cursor-pointer relative transition-all duration-200 hover:text-foreground hover:opacity-100 opacity-60`}
+                                    onClick={() => {
+                                        if (pageId === 'search') {
+                                            if (typeof onOpenSearch === 'function') {
+                                                onOpenSearch();
+                                            } else {
+                                                setActivePage(pageId);
+                                            }
+                                        } else {
+                                            setActivePage(pageId);
+                                        }
+                                    }}
+                                >
+                                    <span
+                                        className={`text-sm font-medium whitespace-nowrap overflow-hidden mr-3 transition-all duration-300 ease-in-out ${isExpanded ? 'opacity-100 max-w-[200px] pointer-events-auto' : 'opacity-0 max-w-0 pointer-events-none'}`}
+                                    >
+                                        {label}
+                                    </span>
+
+                                    <div className="min-w-[40px] w-[40px] h-[40px] flex items-center justify-center rounded-xl overflow-hidden bg-background border border-border group-hover:scale-105 transition-transform duration-200 shadow-sm">
+                                        <IconComp size={20} />
+                                    </div>
+                                </div>
+                            );
+                        })}
                     </div>
                 </>
             )}
@@ -329,7 +378,7 @@ const RightSidebar = ({ user, isSettingsOpen, mode = 'full', setActivePage, todo
                 </>
             )}
 
-            {(mode === 'full' || mode === 'saved') && (
+            {(mode === 'full' || mode === 'saved') && bookmarks.length > 0 && (
                 <>
                     <div className={`w-full flex flex-col mb-[2px] transition-all duration-300 items-end pr-[10px] ${isExpanded ? 'pl-[20px]' : ''}`}>
                         <span className={`text-[10px] font-bold tracking-wider text-right transition-opacity duration-300 ${isExpanded ? 'opacity-100' : 'opacity-60'}`}>
@@ -351,56 +400,29 @@ const RightSidebar = ({ user, isSettingsOpen, mode = 'full', setActivePage, todo
                         }
                     `}
                         </style>
-                        {user ? (
-                            bookmarks.length > 0 ? (
-                                bookmarks.map((product) => (
-                                    <div
-                                        key={product.id}
-                                        className={`group w-full h-[48px] flex items-center justify-end pr-[10px] ${isExpanded ? 'pl-[20px]' : ''} text-muted-foreground cursor-pointer relative transition-all duration-200 hover:text-foreground hover:opacity-100 opacity-60`}
-                                        onClick={() => { }}
-                                    >
-                                        <span
-                                            className={`text-sm font-medium whitespace-nowrap overflow-hidden mr-3 transition-all duration-300 ease-in-out ${isExpanded ? 'opacity-100 max-w-[200px] pointer-events-auto' : 'opacity-0 max-w-0 pointer-events-none'}`}
-                                        >
-                                            {product.title || product.name}
-                                        </span>
-
-                                        <div className="min-w-[40px] w-[40px] h-[40px] flex items-center justify-center rounded-xl overflow-hidden bg-background border border-border group-hover:scale-105 transition-transform duration-200 shadow-sm">
-                                            {(product.image || product.img) ? (
-                                                <img src={product.image || product.img} alt={product.title || product.name} className="w-full h-full object-cover" />
-                                            ) : (
-                                                <span className="text-lg font-bold text-muted-foreground select-none">
-                                                    {(product.title || product.name || '?').charAt(0).toUpperCase()}
-                                                </span>
-                                            )}
-                                        </div>
-                                    </div>
-                                ))
-                            ) : (
-
-                                <div className={`group w-full h-[48px] flex items-center justify-end pr-[10px] ${isExpanded ? 'pl-[20px]' : ''} text-muted-foreground cursor-default opacity-50`}>
-                                    <span
-                                        className={`text-sm font-medium whitespace-nowrap overflow-hidden mr-3 transition-all duration-300 ease-in-out ${isExpanded ? 'opacity-100 max-w-[200px]' : 'opacity-0 max-w-0'}`}
-                                    >
-                                        No bookmarks
-                                    </span>
-                                    <div className="min-w-[40px] w-[40px] flex items-center justify-center group-hover:scale-105 transition-transform duration-200">
-                                        <Bookmark size={28} />
-                                    </div>
-                                </div>
-                            )
-                        ) : (
-                            <div className={`group w-full h-[48px] flex items-center justify-end pr-[10px] ${isExpanded ? 'pl-[20px]' : ''} text-muted-foreground cursor-default opacity-50`}>
+                        {bookmarks.map((product) => (
+                            <div
+                                key={product.id}
+                                className={`group w-full h-[48px] flex items-center justify-end pr-[10px] ${isExpanded ? 'pl-[20px]' : ''} text-muted-foreground cursor-pointer relative transition-all duration-200 hover:text-foreground hover:opacity-100 opacity-60`}
+                                onClick={() => { }}
+                            >
                                 <span
-                                    className={`text-sm font-medium whitespace-nowrap overflow-hidden mr-3 transition-all duration-300 ease-in-out ${isExpanded ? 'opacity-100 max-w-[200px]' : 'opacity-0 max-w-0'}`}
+                                    className={`text-sm font-medium whitespace-nowrap overflow-hidden mr-3 transition-all duration-300 ease-in-out ${isExpanded ? 'opacity-100 max-w-[200px] pointer-events-auto' : 'opacity-0 max-w-0 pointer-events-none'}`}
                                 >
-                                    Login to view
+                                    {product.title || product.name}
                                 </span>
-                                <div className="min-w-[40px] w-[40px] flex items-center justify-center group-hover:scale-105 transition-transform duration-200">
-                                    <Bookmark size={28} />
+
+                                <div className="min-w-[40px] w-[40px] h-[40px] flex items-center justify-center rounded-xl overflow-hidden bg-background border border-border group-hover:scale-105 transition-transform duration-200 shadow-sm">
+                                    {(product.image || product.img) ? (
+                                        <img src={product.image || product.img} alt={product.title || product.name} className="w-full h-full object-cover" />
+                                    ) : (
+                                        <span className="text-lg font-bold text-muted-foreground select-none">
+                                            {(product.title || product.name || '?').charAt(0).toUpperCase()}
+                                        </span>
+                                    )}
                                 </div>
                             </div>
-                        )}
+                        ))}
                     </div>
                 </>
             )}

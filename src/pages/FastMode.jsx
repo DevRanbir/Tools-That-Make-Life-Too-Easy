@@ -1,11 +1,15 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Sparkles, Paperclip, ArrowUp, ChevronDown } from 'lucide-react';
+import { AnimatePresence, motion } from 'framer-motion';
 import MagneticMorphingNav from '../components/MagneticMorphingNav';
+import { TextShimmer } from '../components/motion-primitives/text-shimmer';
+
 
 const FastMode = ({ navigateOnly, user, messages, setMessages }) => {
     // messages state is now lifted to App.jsx
 
     const [inputValue, setInputValue] = useState("");
+    const [isThinking, setIsThinking] = useState(false);
     const messagesEndRef = useRef(null);
 
     const scrollToBottom = () => {
@@ -24,6 +28,7 @@ const FastMode = ({ navigateOnly, user, messages, setMessages }) => {
         const userMsg = { id: Date.now(), role: 'user', content: inputValue };
         setMessages(prev => [...prev, userMsg]);
         setInputValue("");
+        setIsThinking(true);
 
         setTimeout(() => {
             const aiMsg = {
@@ -32,13 +37,14 @@ const FastMode = ({ navigateOnly, user, messages, setMessages }) => {
                 content: "I'm a demo AI response. I can't actually process requests yet, but I look good doing it!"
             };
             setMessages(prev => [...prev, aiMsg]);
+            setIsThinking(false);
         }, 1000);
     };
 
     return (
         <div className="feed-page min-h-screen bg-background relative pb-40">
-            <div className="content-overlay content-area pt-24 max-w-2xl mx-auto px-4">
-                <div className="sticky-nav-container mb-8">
+            <div className="content-overlay content-area max-w-2xl mx-auto px-4">
+                <div className="sticky-nav-container mb-8 !sticky !top-12 z-50 bg-background/95 backdrop-blur-xl py-4 mt-8">
                     <MagneticMorphingNav
                         activeTab="fastmode"
                         onTabChange={(id) => navigateOnly(id)}
@@ -46,7 +52,7 @@ const FastMode = ({ navigateOnly, user, messages, setMessages }) => {
                     />
                 </div>
 
-                <div className="chat-container space-y-6">
+                <div className="chat-container space-y-6 pt-4">
                     {messages.map((msg) => (
                         <div key={msg.id} className={`flex items-start gap-4 ${msg.role === 'user' ? 'flex-row-reverse' : ''}`}>
                             {msg.role === 'ai' && (
@@ -64,7 +70,7 @@ const FastMode = ({ navigateOnly, user, messages, setMessages }) => {
                             )}
 
                             <div className={`flex flex-col max-w-[80%] ${msg.role === 'user' ? 'items-end' : 'items-start'}`}>
-                                <div className={`relative px-5 py-3 text-sm leading-relaxed ${msg.role === 'user'
+                                <div className={`relative px-2 text-sm leading-relaxed ${msg.role === 'user'
                                     ? 'bg-secondary text-secondary-foreground rounded-2xl rounded-tr-sm'
                                     : 'text-muted-foreground'
                                     }`}>
@@ -80,13 +86,23 @@ const FastMode = ({ navigateOnly, user, messages, setMessages }) => {
             <div className="fixed bottom-6 left-1/2 -translate-x-1/2 w-[90%] max-w-2xl z-50">
                 <div className="relative rounded-3xl bg-card border border-border p-4 shadow-2xl">
                     {/* Top Badge */}
-                    {/* <div className="flex justify-between items-center mb-4 px-2">
-                        <div className="flex items-center gap-2">
-                            <span className="font-bold text-white flex items-center gap-1">AI <Sparkles size={12} className="text-yellow-400" /></span>
-                            <span className="text-zinc-400 text-sm">is free this weekend!</span>
-                        </div>
-                        <span className="text-zinc-500 text-xs font-medium cursor-pointer hover:text-white transition-colors">Ship Now!</span>
-                    </div> */}
+                    {/* Top Badge */}
+                    <AnimatePresence>
+                        {isThinking && (
+                            <motion.div
+                                initial={{ opacity: 0, y: 10, height: 0, marginBottom: 0 }}
+                                animate={{ opacity: 1, y: 0, height: 'auto', marginBottom: 16 }}
+                                exit={{ opacity: 0, y: 10, height: 0, marginBottom: 0 }}
+                                transition={{ duration: 0.3 }}
+                                className="flex justify-between items-center px-2 overflow-hidden"
+                            >
+                                <div className="flex items-center gap-2">
+                                    <span className="font-bold text-white flex items-center gap-1">Agent <Sparkles size={12} className="text-yellow-400" /></span>
+                                    <TextShimmer className="text-sm font-medium">Thinking</TextShimmer>
+                                </div>
+                            </motion.div>
+                        )}
+                    </AnimatePresence>
 
                     {/* Input */}
                     <input
@@ -101,7 +117,7 @@ const FastMode = ({ navigateOnly, user, messages, setMessages }) => {
                     {/* Bottom Controls */}
                     <div className="flex items-center justify-between px-2">
                         <button className="flex items-center gap-2 bg-secondary hover:bg-muted transition-colors rounded-full px-3 py-1.5 text-sm text-secondary-foreground border border-border">
-                            <span className="font-semibold text-foreground">AI</span> Claude 4.5 Sonnet <ChevronDown size={14} />
+                            <span className="font-semibold text-foreground">AI</span> Bianca Pro Model
                         </button>
 
                         <div className="flex items-center gap-2">

@@ -3,32 +3,15 @@ import { Database, ChevronDown } from 'lucide-react';
 import MagneticMorphingNav from '../components/MagneticMorphingNav';
 import FileExplorer from '../components/FileExplorer';
 
-const DataPage = ({ navigateOnly, user }) => {
+const DataPage = ({ navigateOnly, user, darkMode }) => {
     const navTabs = [
-        { id: 'home', label: 'For you', icon: <ChevronDown size={14} fill="currentColor" /> },
         { id: 'todos', label: 'Todo' },
+        { id: 'notes', label: 'Notes' },
         { id: 'calendar', label: 'Calendar' },
         { id: 'data', label: 'Data' }
     ];
 
     const [totalFiles, setTotalFiles] = useState(0);
-    const [searchQuery, setSearchQuery] = useState('');
-
-    useEffect(() => {
-        // Handle hash-based search
-        const handleHashChange = () => {
-            const hash = window.location.hash;
-            if (hash) {
-                const query = decodeURIComponent(hash.substring(1));
-                setSearchQuery(query);
-            } else {
-                setSearchQuery('');
-            }
-        };
-        handleHashChange();
-        window.addEventListener('hashchange', handleHashChange);
-        return () => window.removeEventListener('hashchange', handleHashChange);
-    }, []);
 
     return (
         <div className="feed-page min-h-screen bg-background relative pb-20">
@@ -42,29 +25,6 @@ const DataPage = ({ navigateOnly, user }) => {
                         {totalFiles} <span className="text-destructive font-bold">Files stored</span>
                     </p>
 
-                    <div className="hero-search-wrapper">
-                        <div className="big-search-bar">
-                            <input
-                                type="text"
-                                placeholder="Search files..."
-                                value={searchQuery}
-                                onChange={(e) => {
-                                    const newVal = e.target.value;
-                                    setSearchQuery(newVal);
-                                    if (newVal) {
-                                        window.history.replaceState(null, null, `#${encodeURIComponent(newVal)}`);
-                                    } else {
-                                        window.history.replaceState(null, null, window.location.pathname);
-                                    }
-                                }}
-                            />
-                            <div className="search-actions">
-                                <span className="kbd">CTRL + K</span>
-                                <button className="search-btn"><Database size={18} /></button>
-                            </div>
-                        </div>
-                        <div className="hero-footer-text">#Start typing to search.</div>
-                    </div>
                 </div>
             </div>
 
@@ -81,8 +41,8 @@ const DataPage = ({ navigateOnly, user }) => {
                 <div className="w-full max-w-[1400px] mx-auto">
                     <FileExplorer
                         user={user}
-                        externalSearchQuery={searchQuery}
                         onFileCountChange={setTotalFiles}
+                        darkMode={darkMode}
                     />
                 </div>
             </div>

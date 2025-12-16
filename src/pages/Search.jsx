@@ -206,7 +206,7 @@ const SearchPage = ({ navigateOnly, user, sortPreference }) => {
         const newLikedState = !wasLiked;
         const currentLikes = product.likes || 0;
         const newLikesCount = newLikedState ? currentLikes + 1 : Math.max(0, currentLikes - 1);
-        
+
         // Optimistic Update
         // Update local arrays (liked_by) for consistency if we re-visit
         let newLikedBy = product.liked_by || [];
@@ -228,9 +228,9 @@ const SearchPage = ({ navigateOnly, user, sortPreference }) => {
             // If toggle_like RPC exists use that, but we fallback to direct update
             const { error } = await supabase
                 .from('products')
-                .update({ 
+                .update({
                     likes: newLikesCount,
-                    liked_by: newLikedBy 
+                    liked_by: newLikedBy
                 })
                 .eq('id', id);
 
@@ -238,7 +238,7 @@ const SearchPage = ({ navigateOnly, user, sortPreference }) => {
         } catch (err) {
             console.error("Like failed", err);
             // Revert
-             const revertList = (list) => list.map(p =>
+            const revertList = (list) => list.map(p =>
                 p.id === id ? { ...p, isLiked: wasLiked, likes: currentLikes, liked_by: product.liked_by } : p
             );
             setProducts(revertList);
@@ -257,8 +257,13 @@ const SearchPage = ({ navigateOnly, user, sortPreference }) => {
                     <p className="hero-subtitle">
                         {totalTools.toLocaleString()} <span className="text-destructive font-bold">AI tools ready to be searched</span>
                     </p>
+\
+                </div>
+            </div>
 
-                    <div className="hero-search-wrapper">
+            <div className="content-overlay content-area pt-24">
+
+                <div className="hero-search-wrapper">
                         <div className="big-search-bar">
                             <input
                                 type="text"
@@ -282,10 +287,6 @@ const SearchPage = ({ navigateOnly, user, sortPreference }) => {
                         </div>
                         <div className="hero-footer-text">#Start typing to search.</div>
                     </div>
-                </div>
-            </div>
-
-            <div className="content-overlay content-area pt-24">
 
                 <div
                     ref={gridRef}

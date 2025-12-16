@@ -3,7 +3,7 @@ import LoadingScreen from './components/LoadingScreen';
 import Sidebar from './components/Sidebar';
 import RightSidebar from './components/RightSidebar';
 import TopBar from './components/TopBar';
-import AuthModal from './components/AuthModal';
+import AuthDrawer from './components/AuthDrawer';
 import Home from './pages/Home';
 import Manual from './pages/Manual';
 import FastMode from './pages/FastMode';
@@ -14,6 +14,8 @@ import CalendarPage from './pages/Calendar';
 import DataPage from './pages/Data';
 import TagsPage from './pages/Tags';
 import TodosPage from './pages/Todos';
+import NotesPage from './pages/Notes';
+import SearchOverlay from './components/SearchOverlay';
 // import ForYou from './pages/ForYou'; // Reusing Trending for now as requested "same as 2nd"
 
 import { supabase } from './supabase';
@@ -22,6 +24,7 @@ import { Toaster, toast } from 'sonner';
 const App = () => {
   const [loadingState, setLoadingState] = useState('active'); // 'active' | 'fading' | 'off'
   const [loadingScope, setLoadingScope] = useState('global'); // 'local' | 'global'
+  const contentAreaRef = React.useRef(null);
 
   // Initial loading effect
   const timerRef = React.useRef(null);
@@ -48,11 +51,27 @@ const App = () => {
     return () => clearTimers();
   }, []);
 
+  const [user, setUser] = useState(null); // Moved here to avoid initialization error
+
   const [darkMode, setDarkMode] = useState(() => {
-    const saved = localStorage.getItem('theme');
-    // Default to true (dark) if nothing saved
-    return saved !== null ? JSON.parse(saved) : true;
+    try {
+      const saved = localStorage.getItem('theme');
+      return saved !== null ? JSON.parse(saved) : true;
+    } catch (e) {
+      console.warn("Invalid theme in localStorage, defaulting to dark:", e);
+      return true;
+    }
   });
+
+  // Sync Dark Mode from Supabase
+  useEffect(() => {
+    if (user && user.user_metadata?.setting_preferences?.dark_mode !== undefined) {
+      const prefMode = user.user_metadata.setting_preferences.dark_mode;
+      if (prefMode !== darkMode) {
+        setDarkMode(prefMode);
+      }
+    }
+  }, [user?.user_metadata?.setting_preferences?.dark_mode]);
   // Keep track of the theme displayed by the loader specifically
   const [loaderTheme, setLoaderTheme] = useState(darkMode);
 
@@ -72,6 +91,7 @@ const App = () => {
     if (path === '/manage') return 'manage';
     if (path === '/search') return 'search';
     if (path === '/todos') return 'todos';
+    if (path === '/notes') return 'notes';
     if (path === '/tags') return 'tags';
     if (path === '/fast') return 'fastmode';
     if (path === '/shop') return 'shop';
@@ -81,7 +101,7 @@ const App = () => {
     return 'manual';
   });
   const [showAuthModal, setShowAuthModal] = useState(false);
-  const [user, setUser] = useState(null);
+  /* MOVED user STATE DECLARATION UP */
   const [chatMessages, setChatMessages] = useState([
     { id: 1, role: 'ai', content: "Hello! I'm your AI assistant. I'm currently in beta mode, but feel free to ask me anything about the tools available here!" }
   ]);
@@ -104,6 +124,11 @@ const App = () => {
     setLoaderTheme(darkMode); // Sync to current theme BEFORE showing loader
     // 1. Show loader
     setLoadingState('active');
+
+    // Scroll to top to ensure loader is visible and page starts fresh
+    if (contentAreaRef.current) {
+      contentAreaRef.current.scrollTop = 0;
+    }
 
     // 2. Wait for fade/transition, then switch page
     timerRef.current = setTimeout(() => {
@@ -132,7 +157,10 @@ const App = () => {
     timerRef.current = setTimeout(() => {
       setDarkMode(prev => {
         const next = typeof newModeOrFn === 'function' ? newModeOrFn(prev) : newModeOrFn;
-        // NOTE: We do NOT update loaderTheme here. It stays on the OLD theme.
+        // Sync to Supabase
+        if (updateSettingPreference) {
+          updateSettingPreference('dark_mode', next);
+        }
         return next;
       });
 
@@ -173,6 +201,7 @@ const App = () => {
       if (path === '/manage') setActivePage('manage');
       else if (path === '/search') setActivePage('search');
       else if (path === '/todos') setActivePage('todos');
+      else if (path === '/notes') setActivePage('notes');
       else if (path === '/tags') setActivePage('tags');
       else if (path === '/fast') setActivePage('fastmode');
       else if (path === '/shop') setActivePage('shop');
@@ -196,6 +225,7 @@ const App = () => {
     if (activePage === 'manage') { path = '/manage'; pageTitle = 'Manage'; }
     else if (activePage === 'search') { path = '/search'; pageTitle = 'Search'; }
     else if (activePage === 'todos') { path = '/todos'; pageTitle = 'Todos'; }
+    else if (activePage === 'notes') { path = '/notes'; pageTitle = 'Notes'; }
     else if (activePage === 'tags') { path = '/tags'; pageTitle = 'Tags'; }
     else if (activePage === 'fastmode') { path = '/fast'; pageTitle = 'Fast Mode'; }
     else if (activePage === 'shop') { path = '/shop'; pageTitle = 'Shop'; }
@@ -207,9 +237,13 @@ const App = () => {
     document.title = `${pageTitle} - Tools That Make Life Too Easy`;
 
     if (window.location.pathname !== path) {
-      // Preserve hash if it exists (e.g. for search)
-      const hash = window.location.hash;
-      window.history.pushState({}, '', path + hash);
+      // If navigating to search, preserve the hash (query)
+      if (activePage === 'search' && window.location.hash) {
+        window.history.pushState({}, '', path + window.location.hash);
+      } else {
+        // Clean url on page change otherwise
+        window.history.pushState({}, '', path);
+      }
     }
   }, [activePage]);
 
@@ -225,7 +259,7 @@ const App = () => {
 
       const { data: details, error } = await supabase
         .from('user_details')
-        .select('role, credits')
+        .select('role, credits, setting_preferences, avatar_preference, avatar_url')
         .eq('id', currentUser.id)
         .single();
 
@@ -234,7 +268,11 @@ const App = () => {
       }
 
       const role = details?.role || 'freebiee';
-      const credits = details?.credits ?? 0; // Default to 0 if null
+      const credits = details?.credits ?? 0;
+      const settingPreferences = details?.setting_preferences || {};
+      // Prioritize database avatar details
+      const dbAvatarPreference = details?.avatar_preference;
+      const dbAvatarUrl = details?.avatar_url;
 
       // Merge details into user metadata for easy access in components
       setUser({
@@ -242,7 +280,12 @@ const App = () => {
         user_metadata: {
           ...currentUser.user_metadata,
           role: role,
-          credits: credits
+          credits: credits,
+          setting_preferences: settingPreferences,
+          avatar_preference: dbAvatarPreference, // Store preference
+          // If we have a DB avatar and verify it's preferred or exists, use it.
+          // This ensures if 'custom' is set, we use the dbAvatarUrl.
+          ...(dbAvatarUrl ? { avatar_url: dbAvatarUrl } : {})
         }
       });
     };
@@ -272,7 +315,8 @@ const App = () => {
               user_metadata: {
                 ...prevUser.user_metadata,
                 role: payload.new.role,
-                credits: payload.new.credits
+                credits: payload.new.credits,
+                setting_preferences: payload.new.setting_preferences || {}
               }
             };
           }
@@ -284,19 +328,55 @@ const App = () => {
 
     return () => {
       authListener.unsubscribe();
-      supabase.removeChannel(userDetailsSubscription);
+      userDetailsSubscription.unsubscribe();
     };
-  }, []);
+  }, []); // Run once on mount
 
   // Force onboarding if user exists but has no username
+  // Force onboarding if user exists but has no username OR if PFP needs resolution
+  // Force onboarding if user exists but has no username OR if PFP needs resolution
   useEffect(() => {
-    if (user) {
-      const hasUsername = user.user_metadata?.username;
-      if (!hasUsername) {
-        setAuthStartStep(1); // Start at Profile Setup
-        setShowAuthModal(true);
+    const checkUserStatus = async () => {
+      if (user && !showAuthModal) {
+        const hasUsername = user.user_metadata?.username;
+        const googlePic = user.user_metadata?.picture;
+        const currentAvatar = user.user_metadata?.avatar_url;
+
+        // 0. Check if preference already set - if so, we are good.
+        if (user.user_metadata?.avatar_preference) {
+          return;
+        }
+
+        // 1. Check for missing username (New User)
+        if (!hasUsername) {
+          setAuthStartStep(1);
+          setShowAuthModal(true);
+          return;
+        }
+
+        // 2. Check for PFP Conflict (Bucket vs Google)
+        // If user has a Google Pic AND (Current Avatar is that Google Pic OR missing OR they match)
+        if (googlePic && (!currentAvatar || currentAvatar === googlePic)) {
+          // Check if file exists in bucket (async)
+          // We look for 'avatar.png' inside the folder named with user.id
+          const { data: files } = await supabase.storage
+            .from('avatars')
+            .list(user.id, {
+              limit: 1,
+              search: 'avatar.png'
+            });
+
+          if (files && files.length > 0) {
+            // Bucket file exists! But we are using Google Pic. Conflict!
+            console.log("PFP Conflict Detected: Bucket file exists but using Google Pic.");
+            setAuthStartStep(1);
+            setShowAuthModal(true);
+          }
+        }
       }
-    }
+    };
+
+    checkUserStatus();
   }, [user]);
 
   // Sort Preference State
@@ -316,6 +396,65 @@ const App = () => {
         data: { sort_preference: newSort }
       });
       if (error) console.error("Error saving sort preference:", error);
+    }
+  };
+
+  // Pinned Pages Preference State
+  const [pinnedPages, setPinnedPages] = useState([]);
+
+  // Load user preference on auth
+  useEffect(() => {
+    if (user) {
+      const prefs = user.user_metadata?.setting_preferences;
+      if (prefs?.pinned_pages) {
+        setPinnedPages(prefs.pinned_pages);
+      } else if (user.user_metadata?.pinned_pages) {
+        // Fallback to old metadata location if not in new prefs
+        const savedPins = Array.isArray(user.user_metadata.pinned_pages) ? user.user_metadata.pinned_pages : [];
+        setPinnedPages(savedPins.length > 0 ? savedPins : ['fastmode']);
+      } else {
+        setPinnedPages(['fastmode']);
+      }
+    } else {
+      setPinnedPages(['fastmode']);
+    }
+  }, [user]);
+
+  const updatePinnedPages = async (newPinnedPages) => {
+    setPinnedPages(newPinnedPages);
+    if (user) {
+      // Update both old location (for backward capability/safety) and new location
+      updateSettingPreference('pinned_pages', newPinnedPages);
+
+      const { error } = await supabase.auth.updateUser({
+        data: { pinned_pages: newPinnedPages }
+      });
+      if (error) console.error("Error saving pinned pages:", error);
+    }
+  };
+
+  const updateSettingPreference = async (key, value) => {
+    if (!user) return;
+    const currentPrefs = user.user_metadata?.setting_preferences || {};
+    const newPrefs = { ...currentPrefs, [key]: value };
+
+    // Optimistic update
+    setUser(prev => ({
+      ...prev,
+      user_metadata: {
+        ...prev.user_metadata,
+        setting_preferences: newPrefs
+      }
+    }));
+
+    try {
+      await supabase
+        .from('user_details')
+        .update({ setting_preferences: newPrefs })
+        .eq('id', user.id);
+    } catch (error) {
+      console.error("Error updating preferences:", error);
+      // Revert if needed (optional)
     }
   };
 
@@ -348,10 +487,11 @@ const App = () => {
         editTodo={editTodo}
         editSubtask={editSubtask}
       />;
+      case 'notes': return user ? <NotesPage navigateOnly={handlePageChange} user={user} sortPreference={sortPreference} darkMode={darkMode} /> : <Manual navigateOnly={handlePageChange} pageName="Manual" user={user} sortPreference={sortPreference} />;
       case 'tags': return <TagsPage navigateOnly={handlePageChange} user={user} sortPreference={sortPreference} />;
       case 'shop': return <ShopPage navigateOnly={handlePageChange} user={user} sortPreference={sortPreference} />;
       case 'calendar': return user ? <CalendarPage navigateOnly={handlePageChange} user={user} sortPreference={sortPreference} /> : <Manual navigateOnly={handlePageChange} pageName="Manual" user={user} sortPreference={sortPreference} />;
-      case 'data': return user ? <DataPage navigateOnly={handlePageChange} user={user} sortPreference={sortPreference} /> : <Manual navigateOnly={handlePageChange} pageName="Manual" user={user} sortPreference={sortPreference} />;
+      case 'data': return user ? <DataPage navigateOnly={handlePageChange} user={user} sortPreference={sortPreference} darkMode={darkMode} /> : <Manual navigateOnly={handlePageChange} pageName="Manual" user={user} sortPreference={sortPreference} />;
       case 'manage': return (user && user.user_metadata?.role === 'administrator') ? <Manage navigateOnly={handlePageChange} /> : <Manual navigateOnly={handlePageChange} pageName="Manual" user={user} sortPreference={sortPreference} />;
       default: return <Home navigateOnly={handlePageChange} sortPreference={sortPreference} />;
     }
@@ -361,10 +501,33 @@ const App = () => {
   const [settingsTab, setSettingsTab] = useState('preferences');
   const [rightSidebarMode, setRightSidebarMode] = useState('full'); // 'full' | 'events' | 'saved' | 'hidden'
 
+  // Sync Right Sidebar Mode from Supabase
+  useEffect(() => {
+    if (user && user.user_metadata?.setting_preferences?.right_sidebar_mode) {
+      setRightSidebarMode(user.user_metadata.setting_preferences.right_sidebar_mode);
+    }
+  }, [user?.user_metadata?.setting_preferences?.right_sidebar_mode]);
+
   const openSettings = (tab = 'preferences') => {
     setSettingsTab(tab);
     setIsSettingsOpen(true);
   };
+
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
+
+  useEffect(() => {
+    const handleGlobalKeyDown = (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        setIsSearchOpen(true);
+      }
+    };
+
+    window.addEventListener('keydown', handleGlobalKeyDown);
+    return () => window.removeEventListener('keydown', handleGlobalKeyDown);
+  }, []);
+
+  const toggleSearch = () => setIsSearchOpen(prev => !prev);
 
   // --- TODOS STATE & LOGIC LIFTED FROM TODOS PAGE ---
   const [todos, setTodos] = useState([]);
@@ -652,6 +815,10 @@ const App = () => {
           setRightSidebarMode={setRightSidebarMode}
           settingsTab={settingsTab}
           setSettingsTab={setSettingsTab}
+          pinnedPages={pinnedPages}
+          updatePinnedPages={updatePinnedPages}
+          onOpenSearch={toggleSearch}
+          updateSettingPreference={updateSettingPreference}
         />
         <RightSidebar
           user={user}
@@ -660,6 +827,8 @@ const App = () => {
           setActivePage={handlePageChange}
           todos={todos}
           completeNextSubtask={completeNextSubtask}
+          pinnedPages={pinnedPages}
+          onOpenSearch={toggleSearch}
         />
         <TopBar
           darkMode={darkMode}
@@ -671,8 +840,14 @@ const App = () => {
           onSortChange={updateSortPreference}
           openSettings={openSettings}
           isMobile={isMobile}
+          activePage={activePage}
+          onOpenSearch={toggleSearch}
         />
-        <div className="content-area">
+        <div
+          className="content-area"
+          ref={contentAreaRef}
+          style={{ overflowY: loadingState !== 'off' ? 'hidden' : undefined }}
+        >
           {renderContent()}
           {loadingState !== 'off' && (
             <LoadingScreen
@@ -683,14 +858,22 @@ const App = () => {
           )}
         </div>
       </div>
-      <AuthModal
-        isOpen={showAuthModal}
-        onClose={() => setShowAuthModal(false)}
+      <AuthDrawer
+        open={showAuthModal}
+        onOpenChange={setShowAuthModal}
         startStep={authStartStep}
         mode={authMode}
         user={user}
+        darkMode={darkMode}
+        setDarkMode={updateTheme}
       />
       <Toaster />
+      {isSearchOpen && (
+        <SearchOverlay
+          navigateOnly={handlePageChange}
+          onClose={() => setIsSearchOpen(false)}
+        />
+      )}
 
     </div>
   );

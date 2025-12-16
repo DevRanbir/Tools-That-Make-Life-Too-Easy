@@ -1,7 +1,8 @@
 
 import React, { useState, useRef, useEffect } from 'react';
-import { ListTodo, CheckSquare, Plus, Trash2, Check, ChevronRight, ChevronDown, Calendar as CalendarIcon, Tag as TagIcon, X, Pin } from 'lucide-react';
+import { ListTodo, CheckSquare, Plus, Trash2, Check, ChevronRight, ChevronDown, Calendar as CalendarIcon, Tag as TagIcon, X, Pin, Calendar } from 'lucide-react';
 import MagneticMorphingNav from '../components/MagneticMorphingNav';
+import { supabase } from '../supabase';
 import { gsap } from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
 
@@ -13,10 +14,9 @@ const TodosPage = ({ navigateOnly, user, todos, toggleTodo, toggleExpand, addTod
     const [newSubtaskInputs, setNewSubtaskInputs] = useState({});
 
     const navTabs = [
-        { id: 'home', label: 'For you', icon: <ChevronDown size={14} fill="currentColor" /> },
         { id: 'todos', label: 'Todo' },
-        { id: 'calendar', label: 'Calendar' },
-        { id: 'data', label: 'Data' }
+        { id: 'notes', label: 'Notes' },
+        { id: 'calendar', label: 'Calendar' }
     ];
 
     // Animations
@@ -29,6 +29,37 @@ const TodosPage = ({ navigateOnly, user, todos, toggleTodo, toggleExpand, addTod
             );
         }
     }, [todos.length === 0]); // Initial load animation only ideally
+
+    // --- Linked Events Logic ---
+    const [linkedEvents, setLinkedEvents] = useState({});
+
+    useEffect(() => {
+        if (!user || todos.length === 0) return;
+
+        const fetchLinkedEvents = async () => {
+            const todoIds = todos.map(t => t.id);
+            if (todoIds.length === 0) return;
+
+            const { data, error } = await supabase
+                .from('event_todos')
+                .select('todo_id, events(id, title, start_time, color)')
+                .in('todo_id', todoIds);
+
+            if (data) {
+                const map = {};
+                data.forEach(item => {
+                    if (item.events) {
+                        if (!map[item.todo_id]) map[item.todo_id] = [];
+                        map[item.todo_id].push(item.events);
+                    }
+                });
+                setLinkedEvents(map);
+            }
+        };
+        fetchLinkedEvents();
+    }, [user, todos]);
+
+
 
     // Local wrappers to handle inputs
     const handleAddTodo = (e) => {

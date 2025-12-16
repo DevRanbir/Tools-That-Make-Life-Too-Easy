@@ -21,14 +21,22 @@ const ShopPage = ({ navigateOnly, user, sortPreference }) => {
     const [searchQuery, setSearchQuery] = useState('');
 
     const [userDetails, setUserDetails] = useState(null);
+    const [showUpgradeModal, setShowUpgradeModal] = useState(false);
+    const [pendingUpgradePlan, setPendingUpgradePlan] = useState(null);
 
     useEffect(() => {
         // Handle hash-based search on mount and hash change
         const handleHashChange = () => {
             const hash = window.location.hash;
             if (hash) {
-                const query = decodeURIComponent(hash.substring(1)); // Remove the '#'
-                setSearchQuery(query);
+                const content = decodeURIComponent(hash.substring(1)); // Remove the '#'
+                if (content.startsWith('tab=')) {
+                    const tabId = content.split('=')[1];
+                    if (tabId) setActiveTab(tabId);
+                    setSearchQuery(''); // Clear search if we are navigating to a tab
+                } else {
+                    setSearchQuery(content);
+                }
             } else {
                 setSearchQuery('');
             }
@@ -250,36 +258,9 @@ const ShopPage = ({ navigateOnly, user, sortPreference }) => {
                 return;
             }
 
-            // Warning about credit loss
-            const confirmed = window.confirm(
-                "Warning: Changing your role will reset your billing cycle and credit balance.\n\n" +
-                "Any current pending credits will be lost and replaced with the new plan's allocation.\n\n" +
-                "Do you want to proceed?"
-            );
-
-            if (!confirmed) return;
-
-            const loadingToast = toast.loading(`Upgrading to ${plan.name}...`);
-
-            try {
-                const { error } = await supabase
-                    .from('user_details')
-                    .update({ role: role, credits: credits })
-                    .eq('id', user.id);
-
-                if (error) throw error;
-
-                // Refresh user details
-                const { data: newData } = await supabase.from('user_details').select('*').eq('id', user.id).single();
-                if (newData) setUserDetails(newData);
-
-                toast.dismiss(loadingToast);
-                toast.success(`Successfully upgraded to ${plan.name}!`);
-            } catch (error) {
-                console.error('Error upgrading role:', error);
-                toast.dismiss(loadingToast);
-                toast.error("Failed to upgrade role. Please try again.");
-            }
+            // Warning about credit loss needs confirmation
+            setPendingUpgradePlan(plan);
+            setShowUpgradeModal(true);
         } else {
             // BUY CREDITS LOGIC
             if (!userDetails) {
@@ -320,6 +301,48 @@ const ShopPage = ({ navigateOnly, user, sortPreference }) => {
                 toast.dismiss(loadingToast);
                 toast.error("Purchase failed.");
             }
+        }
+    };
+
+    const executeRoleUpgrade = async () => {
+        const plan = pendingUpgradePlan;
+        if (!plan || !user) return;
+
+        setShowUpgradeModal(false); // Close immediately or wait? Better close first.
+
+        let role = 'freebiee';
+        let credits = 0;
+
+        if (plan.name === 'Common') {
+            role = 'common';
+            credits = 20;
+        } else if (plan.name === 'Wealthy') {
+            role = 'wealthy';
+            credits = 50;
+        }
+
+        const loadingToast = toast.loading(`Upgrading to ${plan.name}...`);
+
+        try {
+            const { error } = await supabase
+                .from('user_details')
+                .update({ role: role, credits: credits })
+                .eq('id', user.id);
+
+            if (error) throw error;
+
+            // Refresh user details
+            const { data: newData } = await supabase.from('user_details').select('*').eq('id', user.id).single();
+            if (newData) setUserDetails(newData);
+
+            toast.dismiss(loadingToast);
+            toast.success(`Successfully upgraded to ${plan.name}!`);
+        } catch (error) {
+            console.error('Error upgrading role:', error);
+            toast.dismiss(loadingToast);
+            toast.error("Failed to upgrade role. Please try again.");
+        } finally {
+            setPendingUpgradePlan(null);
         }
     };
 
@@ -512,6 +535,44 @@ const ShopPage = ({ navigateOnly, user, sortPreference }) => {
                     />
                 </div>
             </div>
+
+            {/* Custom Confirmation Modal */}
+            {showUpgradeModal && pendingUpgradePlan && (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+                    {/* Backdrop */}
+                    <div
+                        className="absolute inset-0 bg-background/80 backdrop-blur-sm transition-all"
+                        onClick={() => setShowUpgradeModal(false)}
+                    />
+
+                    {/* Modal Content */}
+                    <div className="relative z-[101] w-full max-w-md overflow-hidden rounded-xl border bg-card p-0 shadow-lg animate-in fade-in zoom-in-95 duration-200">
+                        <div className="p-6">
+                            <h3 className="text-xl font-semibold leading-none tracking-tight mb-2">Confirm Upgrade</h3>
+                            <p className="text-sm text-muted-foreground mb-6">
+                                Warning: Upgrading to <span className="font-bold text-primary">{pendingUpgradePlan.name}</span> will reset your current billing cycle.
+                                <br /><br />
+                                Any remaining credits will be replaced by the new plan's allocation immediately.
+                            </p>
+
+                            <div className="flex justify-end gap-3">
+                                <button
+                                    onClick={() => setShowUpgradeModal(false)}
+                                    className="px-4 py-2 rounded-md hover:bg-muted text-sm font-medium transition-colors"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    onClick={executeRoleUpgrade}
+                                    className="px-4 py-2 rounded-md bg-primary text-primary-foreground hover:bg-primary/90 text-sm font-medium transition-colors"
+                                >
+                                    Confirm Upgrade
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

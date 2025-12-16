@@ -1,8 +1,14 @@
-import React, { useState } from 'react';
-import { Search, Sparkles } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Search, Sparkles, X } from 'lucide-react';
+import { supabase } from '../supabase';
 import DesignedAtSymbol from './DesignedAtSymbol';
 
-const TopBar = ({ darkMode, setDarkMode, onAuthClick, user, navigateOnly, sortPreference, onSortChange, openSettings, isMobile }) => {
+
+
+const TopBar = ({ darkMode, setDarkMode, onAuthClick, user, navigateOnly, sortPreference, onSortChange, openSettings, isMobile, activePage, onOpenSearch }) => {
+    // Pages where the central part (sort + search) should be hidden
+    const hiddenPages = ['fastmode', 'todos', 'calendar', 'shop', 'data', 'manage', 'tags', 'search', 'notes'];
+    const shouldHideCenter = hiddenPages.includes(activePage);
 
     const getLabel = (type, currentSort) => {
         if (type === 'trending') return isMobile ? 'T' : 'Trending';
@@ -42,7 +48,13 @@ const TopBar = ({ darkMode, setDarkMode, onAuthClick, user, navigateOnly, sortPr
         return (
             <button
                 className="start-now-btn"
-                style={isMobile ? { padding: '6px 8px', fontSize: '0.8rem', whiteSpace: 'nowrap', border: 'none', background: 'transparent' } : {}}
+                style={isMobile ? {
+                    padding: '6px 8px',
+                    fontSize: '0.8rem',
+                    whiteSpace: 'nowrap',
+                    border: 'none',
+                    background: shouldHideCenter ? undefined : 'transparent'
+                } : {}}
                 onClick={() => openSettings && openSettings('account')}
             >
                 <span className="flex items-center gap-0.5 underline decoration-dashed underline-offset-4 cursor-pointer">
@@ -89,21 +101,32 @@ const TopBar = ({ darkMode, setDarkMode, onAuthClick, user, navigateOnly, sortPr
     if (isMobile) {
         return (
             <div className="topbar mobile">
-                <div className="tabs mobile-scroll-container items-center gap-1">
+                <div className={`${shouldHideCenter ? '' : 'tabs'} mobile-scroll-container flex w-full ${shouldHideCenter ? 'justify-center' : ''} items-center gap-1`}>
                     <div className="flex items-center">
                         <UserButton />
                     </div>
 
-                    <SortButtonsGroup />
-
                     <div
-                        className={`search-bar-merged cursor-pointer hover:text-foreground transition-colors ${isMobile ? 'active p-1 min-w-0 border-none bg-transparent' : 'ml-2'}`}
-                        onClick={() => navigateOnly && navigateOnly('search')}
-                        style={isMobile ? { width: '28px', height: '28px', justifyContent: 'center', padding: 0 } : {}}
+                        className="flex items-center gap-1 transition-all duration-300 ease-in-out"
+                        style={{
+                            opacity: shouldHideCenter ? 0 : 1,
+                            transform: shouldHideCenter ? 'translateY(-10px)' : 'translateY(0)',
+                            pointerEvents: shouldHideCenter ? 'none' : 'auto',
+                            maxWidth: shouldHideCenter ? 0 : '400px', // Collapse width roughly
+                            overflow: 'hidden'
+                        }}
                     >
-                        <Search size={16} />
-                        {!isMobile && <span>Search</span>}
-                        {!isMobile && <span className="kbd">CTRL + K</span>}
+                        <SortButtonsGroup />
+
+                        <div
+                            className={`search-bar-merged cursor-pointer hover:text-foreground transition-colors ${isMobile ? 'active p-1 min-w-0 border-none bg-transparent' : 'ml-2'}`}
+                            onClick={onOpenSearch}
+                            style={isMobile ? { width: '28px', height: '28px', justifyContent: 'center', padding: 0 } : {}}
+                        >
+                            <Search size={16} />
+                            {!isMobile && <span>Search</span>}
+                            {!isMobile && <span className="kbd">CTRL + K</span>}
+                        </div>
                     </div>
                 </div>
             </div>
@@ -111,18 +134,32 @@ const TopBar = ({ darkMode, setDarkMode, onAuthClick, user, navigateOnly, sortPr
     }
 
     return (
-        <div className="topbar">
+        <div
+            className="topbar"
+            style={{
+                height: shouldHideCenter ? '0px' : undefined,
+                transition: 'height 0.3s ease-in-out'
+            }}
+        >
             {/* Left side empty or reserved */}
             <div className="topbar-left">
             </div>
 
-            <div className="topbar-center">
+            <div
+                className="topbar-center"
+                style={{
+                    transition: 'all 0.3s ease-in-out',
+                    opacity: shouldHideCenter ? 0 : 1,
+                    transform: `translateX(-50%) ${shouldHideCenter ? 'translateY(-20px)' : 'translateY(0)'}`,
+                    pointerEvents: shouldHideCenter ? 'none' : 'auto'
+                }}
+            >
                 <div className="tabs">
                     <SortButtonsGroup />
 
                     <div
                         className="search-bar-merged cursor-pointer hover:text-foreground transition-colors ml-2"
-                        onClick={() => navigateOnly && navigateOnly('search')}
+                        onClick={onOpenSearch}
                     >
                         <Search size={16} />
                         <span>Search</span>
