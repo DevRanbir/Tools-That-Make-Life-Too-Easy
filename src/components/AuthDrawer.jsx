@@ -108,6 +108,9 @@ const AuthDrawer = ({
                 const { data, error } = await supabase.auth.signUp({
                     email,
                     password,
+                    options: {
+                        emailRedirectTo: 'https://tools-that-make-life-too-easy.appwrite.network/'
+                    }
                 });
                 if (error) throw error;
 
@@ -141,7 +144,7 @@ const AuthDrawer = ({
             const { error } = await supabase.auth.signInWithOAuth({
                 provider: 'google',
                 options: {
-                    redirectTo: window.location.origin,
+                    redirectTo: 'https://tools-that-make-life-too-easy.appwrite.network/',
                 },
             });
             if (error) throw error;
@@ -611,7 +614,7 @@ const AuthDrawer = ({
                                                         <div className="flex items-center gap-3">
                                                             {/* Option 1: New (Blob) OR Saved (Bucket) OR Upload New */}
                                                             {avatarBlob ? (
-                                                                <div 
+                                                                <div
                                                                     className={`flex-1 p-2 rounded-xl border cursor-pointer transition-all flex items-center gap-2 bg-secondary border-primary/50`}
                                                                     onClick={() => fileInputRef.current?.click()}
                                                                 >
@@ -621,11 +624,11 @@ const AuthDrawer = ({
                                                                     <span className="text-xs font-semibold">New</span>
                                                                 </div>
                                                             ) : bucketAvatarUrl ? (
-                                                                <div 
+                                                                <div
                                                                     className={`flex-1 p-2 rounded-xl border cursor-pointer transition-all flex items-center gap-2 ${onboardingData.avatar === bucketAvatarUrl ? 'bg-secondary border-primary/50' : 'hover:bg-secondary/50 border-border'}`}
                                                                     onClick={() => {
                                                                         setAvatarBlob(null);
-                                                                        setOnboardingData(prev => ({...prev, avatar: bucketAvatarUrl}));
+                                                                        setOnboardingData(prev => ({ ...prev, avatar: bucketAvatarUrl }));
                                                                     }}
                                                                 >
                                                                     <div className="w-8 h-8 rounded-full overflow-hidden bg-muted flex-shrink-0">
@@ -634,7 +637,7 @@ const AuthDrawer = ({
                                                                     <span className="text-xs font-semibold">Saved</span>
                                                                 </div>
                                                             ) : (
-                                                                <div 
+                                                                <div
                                                                     className={`flex-1 p-2 rounded-xl border border-dashed cursor-pointer transition-all flex items-center gap-2 hover:bg-secondary/50 border-border`}
                                                                     onClick={() => fileInputRef.current?.click()}
                                                                 >
@@ -646,11 +649,11 @@ const AuthDrawer = ({
                                                             )}
 
                                                             {/* Option 2: Google */}
-                                                            <div 
+                                                            <div
                                                                 className={`flex-1 p-2 rounded-xl border cursor-pointer transition-all flex items-center gap-2 ${onboardingData.avatar === user.user_metadata.picture && !avatarBlob ? 'bg-secondary border-primary/50' : 'hover:bg-secondary/50 border-border'}`}
                                                                 onClick={() => {
                                                                     setAvatarBlob(null);
-                                                                    setOnboardingData(prev => ({...prev, avatar: user.user_metadata.picture}));
+                                                                    setOnboardingData(prev => ({ ...prev, avatar: user.user_metadata.picture }));
                                                                 }}
                                                             >
                                                                 <div className="w-8 h-8 rounded-full overflow-hidden bg-muted flex-shrink-0">

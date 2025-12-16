@@ -110,6 +110,11 @@ const App = () => {
   const handlePageChange = (newPage) => {
     if (newPage === activePage) return;
 
+    // Clear hash when changing pages to prevent search queries from persisting
+    if (window.location.hash) {
+      window.history.replaceState(null, null, ' ');
+    }
+
     const isInstantTransition = (activePage === 'manual' && newPage === 'fastmode');
 
     if (isInstantTransition) {
