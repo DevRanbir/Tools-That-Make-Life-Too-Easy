@@ -102,9 +102,25 @@ const App = () => {
   });
   const [showAuthModal, setShowAuthModal] = useState(false);
   /* MOVED user STATE DECLARATION UP */
-  const [chatMessages, setChatMessages] = useState([
-    { id: 1, role: 'ai', content: "Hello! I'm your AI assistant. I'm currently in beta mode, but feel free to ask me anything about the tools available here!" }
-  ]);
+  const [chatMessages, setChatMessages] = useState(() => {
+    try {
+      const saved = localStorage.getItem('chat_history');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch (e) {
+      console.warn("Error loading chat history:", e);
+    }
+    return [
+      { id: Date.now(), role: 'ai', content: "Hello! I'm your AI assistant. I'm currently in beta mode, but feel free to ask me anything about the tools available here!" }
+    ];
+  });
+
+  // Persist chat history
+  useEffect(() => {
+    localStorage.setItem('chat_history', JSON.stringify(chatMessages));
+  }, [chatMessages]);
   // activePage determines which page component to render
 
   const handlePageChange = (newPage) => {
@@ -473,11 +489,11 @@ const App = () => {
 
   const renderContent = () => {
     switch (activePage) {
-      case 'home': return <Manual navigateOnly={handlePageChange} pageName="For You" user={user} sortPreference={sortPreference} />;
-      case 'fastmode': return <FastMode navigateOnly={handlePageChange} user={user} messages={chatMessages} setMessages={setChatMessages} />;
+      case 'home': return user ? <Manual navigateOnly={handlePageChange} pageName="For You" user={user} sortPreference={sortPreference} /> : <Manual navigateOnly={handlePageChange} pageName="Manual" user={user} sortPreference={sortPreference} />;
+      case 'fastmode': return <FastMode navigateOnly={handlePageChange} user={user} messages={chatMessages} setMessages={setChatMessages} onAuthClick={handleAuthClick} />;
       case 'manual': return <Manual navigateOnly={handlePageChange} pageName="Manual" user={user} sortPreference={sortPreference} />;
       case 'search': return <SearchPage navigateOnly={handlePageChange} user={user} sortPreference={sortPreference} />;
-      case 'todos': return <TodosPage
+      case 'todos': return user ? <TodosPage
         navigateOnly={handlePageChange}
         user={user}
         todos={todos}
@@ -491,7 +507,7 @@ const App = () => {
         togglePin={togglePin}
         editTodo={editTodo}
         editSubtask={editSubtask}
-      />;
+      /> : <Manual navigateOnly={handlePageChange} pageName="Manual" user={user} sortPreference={sortPreference} />;
       case 'notes': return user ? <NotesPage navigateOnly={handlePageChange} user={user} sortPreference={sortPreference} darkMode={darkMode} /> : <Manual navigateOnly={handlePageChange} pageName="Manual" user={user} sortPreference={sortPreference} />;
       case 'tags': return <TagsPage navigateOnly={handlePageChange} user={user} sortPreference={sortPreference} />;
       case 'shop': return <ShopPage navigateOnly={handlePageChange} user={user} sortPreference={sortPreference} />;

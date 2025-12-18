@@ -1055,13 +1055,15 @@ input:checked+.slider:before {
 
 /* Custom Selection Color */
 ::selection {
-  background-color: color-mix(in srgb, var(--destructive), transparent 50%);
-  color: inherit;
+  background-color: #a6bf71;
+  color: #1a1a1a;
+  text-shadow: 0 0 0.5px currentColor;
 }
 
 ::-moz-selection {
-  background-color: color-mix(in srgb, var(--destructive), transparent 50%);
-  color: inherit;
+  background-color: #a6bf71;
+  color: #1a1a1a;
+  text-shadow: 0 0 0.5px currentColor;
 }
 
 @keyframes shimmer {
@@ -1076,4 +1078,10 @@ input:checked+.slider:before {
 
 .animate-shimmer {
   animation: shimmer 5s linear infinite;
+}
+
+/* Dot Pattern Background */
+.bg-dot-pattern {
+  background-image: radial-gradient(var(--border) 1px, transparent 1px);
+  background-size: 24px 24px;
 }
