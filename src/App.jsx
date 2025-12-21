@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Analytics } from '@vercel/analytics/react';
 import LoadingScreen from './components/LoadingScreen';
 import Sidebar from './components/Sidebar';
 import RightSidebar from './components/RightSidebar';
@@ -1023,7 +1022,6 @@ const App = () => {
           onClose={() => setIsSearchOpen(false)}
         />
       )}
-      <Analytics />
     </div>
   );
 };
