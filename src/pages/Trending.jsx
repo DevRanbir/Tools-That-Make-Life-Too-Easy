@@ -46,7 +46,7 @@ const Trending = ({ navigateOnly, pageName = 'Trending', user, sortPreference })
                         .from('user_details')
                         .select('bookmarks')
                         .eq('id', user.id)
-                        .single();
+                        .maybeSingle();
 
                     if (userError && userError.code !== 'PGRST116') {
                         console.error("Error fetching user details:", userError);

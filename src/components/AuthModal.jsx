@@ -16,7 +16,9 @@ const AuthModal = ({ isOpen, onClose, startStep = 0, mode = 'default', user }) =
         username: '',
         avatar: null, // preview URL
         occupation: 'freelancer',
-        preference: 'mixed'
+        preference: 'mixed',
+        manage_sidebar_mode: 'show',
+        tool_deck_preference: 'todo'
     });
     const fileInputRef = React.useRef(null);
 
@@ -63,6 +65,9 @@ const AuthModal = ({ isOpen, onClose, startStep = 0, mode = 'default', user }) =
                 const { data, error } = await supabase.auth.signUp({
                     email,
                     password,
+                    options: {
+                        emailRedirectTo: window.location.origin
+                    }
                 });
                 if (error) throw error;
 
@@ -226,19 +231,23 @@ const AuthModal = ({ isOpen, onClose, startStep = 0, mode = 'default', user }) =
                 finalAvatarUrl = onboardingData.avatar;
             }
 
+            // Fetch existing preferences if any
+            const currentPrefs = session.user.user_metadata?.setting_preferences || {};
+
+            const newPrefs = {
+                ...currentPrefs,
+                manage_sidebar_mode: onboardingData.manage_sidebar_mode,
+                tool_deck_preference: onboardingData.tool_deck_preference
+            };
+
             const updates = {
                 username: onboardingData.username,
                 occupation: onboardingData.occupation,
                 sort_preference: onboardingData.preference,
                 updated_at: new Date(),
-                // Default setup for new users (or existing ones updating)
-                // We should only set defaults if they don't exist, but here we might just overwrite for setup?
-                // Actually, user might already have roles if they logged in before. 
-                // We should probably NOT overwrite role/credits if they exist on the user object?
-                // But the user object in this scope is `session.user`.
-                // Let's assume on first setup we default them.
-                role: user?.user_metadata?.role || 'freebiee',
-                credits: user?.user_metadata?.credits !== undefined ? user.user_metadata.credits : 0
+                role: user?.user_metadata?.role || 'NewUser',
+                credits: user?.user_metadata?.credits !== undefined ? user.user_metadata.credits : 50,
+                setting_preferences: newPrefs
             };
 
             if (finalAvatarUrl) {
@@ -261,7 +270,8 @@ const AuthModal = ({ isOpen, onClose, startStep = 0, mode = 'default', user }) =
                     sort_preference: onboardingData.preference,
                     avatar_url: finalAvatarUrl || `https://ui-avatars.com/api/?name=${onboardingData.username}`,
                     role: updates.role,
-                    credits: updates.credits
+                    credits: updates.credits,
+                    setting_preferences: newPrefs
                 });
 
             if (profileError) console.error("Error creating user profile:", profileError);
@@ -525,30 +535,34 @@ const AuthModal = ({ isOpen, onClose, startStep = 0, mode = 'default', user }) =
                             <p className="text-muted-foreground text-sm mb-6 text-center">This helps us customize your feed.</p>
 
                             <div className="flex flex-col gap-3 mb-6">
-                                {['Student', 'Worker', 'Freelancer'].map((role) => (
-                                    <div
-                                        key={role}
-                                        onClick={() => setOnboardingData({ ...onboardingData, occupation: role.toLowerCase() })}
-                                        className={`p-4 rounded-xl border cursor-pointer transition-all flex items-center justify-between group ${onboardingData.occupation === role.toLowerCase()
-                                            ? 'bg-secondary border-primary/50 shadow-[0_0_15px_-3px_rgba(255,255,255,0.1)]'
-                                            : 'bg-card border-border hover:border-ring/50'
-                                            }`}
-                                    >
-                                        <div className="flex items-center gap-3">
-                                            <div className={`w-8 h-8 rounded-full flex items-center justify-center ${onboardingData.occupation === role.toLowerCase() ? 'bg-foreground text-background' : 'bg-muted text-muted-foreground'}`}>
-                                                {role === 'Student' && <span className="text-xs font-bold">🎓</span>}
-                                                {role === 'Worker' && <span className="text-xs font-bold">💼</span>}
-                                                {role === 'Freelancer' && <span className="text-xs font-bold">🚀</span>}
+                                {['Student', 'Worker', 'Freelancer', 'Prefer not to say'].map((role) => {
+                                    const value = role === 'Prefer not to say' ? 'prefer_not_to_say' : role.toLowerCase();
+                                    return (
+                                        <div
+                                            key={role}
+                                            onClick={() => setOnboardingData({ ...onboardingData, occupation: value })}
+                                            className={`p-4 rounded-xl border cursor-pointer transition-all flex items-center justify-between group ${onboardingData.occupation === value
+                                                ? 'bg-secondary border-primary/50 shadow-[0_0_15px_-3px_rgba(255,255,255,0.1)]'
+                                                : 'bg-card border-border hover:border-ring/50'
+                                                }`}
+                                        >
+                                            <div className="flex items-center gap-3">
+                                                <div className={`w-8 h-8 rounded-full flex items-center justify-center ${onboardingData.occupation === value ? 'bg-foreground text-background' : 'bg-muted text-muted-foreground'}`}>
+                                                    {role === 'Student' && <span className="text-xs font-bold">🎓</span>}
+                                                    {role === 'Worker' && <span className="text-xs font-bold">💼</span>}
+                                                    {role === 'Freelancer' && <span className="text-xs font-bold">🚀</span>}
+                                                    {role === 'Prefer not to say' && <span className="text-xs font-bold">🤐</span>}
+                                                </div>
+                                                <span className={`font-medium transition-colors ${onboardingData.occupation === value ? 'text-foreground' : 'text-muted-foreground group-hover:text-foreground'}`}>{role}</span>
                                             </div>
-                                            <span className={`font-medium transition-colors ${onboardingData.occupation === role.toLowerCase() ? 'text-foreground' : 'text-muted-foreground group-hover:text-foreground'}`}>{role}</span>
+                                            {onboardingData.occupation === value && (
+                                                <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} className="w-5 h-5 bg-foreground rounded-full flex items-center justify-center">
+                                                    <Check size={12} className="text-background" strokeWidth={3} />
+                                                </motion.div>
+                                            )}
                                         </div>
-                                        {onboardingData.occupation === role.toLowerCase() && (
-                                            <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} className="w-5 h-5 bg-foreground rounded-full flex items-center justify-center">
-                                                <Check size={12} className="text-background" strokeWidth={3} />
-                                            </motion.div>
-                                        )}
-                                    </div>
-                                ))}
+                                    );
+                                })}
                             </div>
 
                             <button
@@ -604,8 +618,159 @@ const AuthModal = ({ isOpen, onClose, startStep = 0, mode = 'default', user }) =
                                 ))}
                             </div>
 
+                            <button
+                                onClick={() => setStep(4)}
+                                className="w-full bg-foreground hover:opacity-90 text-background font-bold py-3.5 rounded-xl transition-all flex items-center justify-center gap-2 shadow-lg hover:shadow-xl hover:scale-[1.01] active:scale-[0.99]"
+                            >
+                                Continue <ArrowRight size={16} />
+                            </button>
+                        </motion.div>
+                    )}
+
+                    {step === 4 && (
+                        <motion.div
+                            key="manage-sidebar"
+                            initial="initial"
+                            animate="animate"
+                            exit="exit"
+                            variants={stepVariants}
+                            transition={{ duration: 0.2 }}
+                            className="flex flex-col"
+                        >
+                            <h2 className="text-xl font-bold text-foreground mb-2 text-center">Sidebar Preference</h2>
+                            <p className="text-muted-foreground text-sm mb-6 text-center">Would you like a new sidebar for management?</p>
+
+                            <div className="grid grid-cols-2 gap-4 mb-8">
+                                {[
+                                    { id: 'show', label: 'Show', icon: <Check size={20} /> },
+                                    { id: 'hide', label: 'Hide', icon: <X size={20} /> }
+                                ].map((opt) => (
+                                    <div
+                                        key={opt.id}
+                                        onClick={() => setOnboardingData({ ...onboardingData, manage_sidebar_mode: opt.id })}
+                                        className={`p-4 rounded-xl border cursor-pointer transition-all flex flex-col items-center justify-center gap-2 group ${onboardingData.manage_sidebar_mode === opt.id
+                                            ? 'bg-secondary border-primary/50 shadow-md'
+                                            : 'bg-card border-border hover:border-ring/50'
+                                            }`}
+                                    >
+                                        <div className={`p-2 rounded-full ${onboardingData.manage_sidebar_mode === opt.id ? 'bg-foreground text-background' : 'bg-muted text-muted-foreground'}`}>
+                                            {opt.icon}
+                                        </div>
+                                        <span className={`font-bold transition-colors ${onboardingData.manage_sidebar_mode === opt.id ? 'text-foreground' : 'text-muted-foreground'}`}>{opt.label}</span>
+                                    </div>
+                                ))}
+                            </div>
+
+                            <button
+                                onClick={() => setStep(5)}
+                                className="w-full bg-foreground hover:opacity-90 text-background font-bold py-3.5 rounded-xl transition-all flex items-center justify-center gap-2 shadow-lg hover:shadow-xl hover:scale-[1.01] active:scale-[0.99]"
+                            >
+                                Continue <ArrowRight size={16} />
+                            </button>
+                        </motion.div>
+                    )}
+
+                    {step === 5 && (
+                        <motion.div
+                            key="tool-deck"
+                            initial="initial"
+                            animate="animate"
+                            exit="exit"
+                            variants={stepVariants}
+                            transition={{ duration: 0.2 }}
+                            className="flex flex-col"
+                        >
+                            <h2 className="text-xl font-bold text-foreground mb-2 text-center">Tool Deck</h2>
+                            <p className="text-muted-foreground text-sm mb-6 text-center">Choose your primary quick-access tool</p>
+
+                            <div className="grid grid-cols-1 gap-3 mb-8">
+                                {['Todo', 'Notes', 'Calendar'].map((tool) => (
+                                    <div
+                                        key={tool}
+                                        onClick={() => setOnboardingData({ ...onboardingData, tool_deck_preference: tool.toLowerCase() })}
+                                        className={`relative overflow-hidden p-4 rounded-xl border cursor-pointer transition-all flex items-center justify-between group ${onboardingData.tool_deck_preference === tool.toLowerCase()
+                                            ? 'bg-secondary border-primary/50 shadow-md'
+                                            : 'bg-card border-border hover:border-ring/50'
+                                            }`}
+                                    >
+                                        <span className={`text-sm font-bold ${onboardingData.tool_deck_preference === tool.toLowerCase() ? 'text-foreground' : 'text-muted-foreground'}`}>
+                                            {tool}
+                                        </span>
+                                        {onboardingData.tool_deck_preference === tool.toLowerCase() && (
+                                            <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} className="z-10 bg-foreground rounded-full p-1">
+                                                <Check size={12} className="text-background" strokeWidth={3} />
+                                            </motion.div>
+                                        )}
+                                    </div>
+                                ))}
+                            </div>
+
+                            <button
+                                onClick={() => setStep(6)}
+                                className="w-full bg-foreground hover:opacity-90 text-background font-bold py-3.5 rounded-xl transition-all flex items-center justify-center gap-2 shadow-lg hover:shadow-xl hover:scale-[1.01] active:scale-[0.99]"
+                            >
+                                Continue <ArrowRight size={16} />
+                            </button>
+                        </motion.div>
+                    )}
+
+                    {step === 6 && (
+                        <motion.div
+                            key="welcome"
+                            initial="initial"
+                            animate="animate"
+                            exit="exit"
+                            variants={stepVariants}
+                            transition={{ duration: 0.2 }}
+                            className="flex flex-col items-center text-center space-y-6"
+                        >
+                            <div className="relative">
+                                <div className="w-24 h-24 rounded-full border-4 border-background shadow-xl overflow-hidden">
+                                    {onboardingData.avatar || avatarBlob ? (
+                                        <img
+                                            src={avatarBlob ? URL.createObjectURL(avatarBlob) : onboardingData.avatar}
+                                            alt="Profile"
+                                            className="w-full h-full object-cover"
+                                        />
+                                    ) : (
+                                        <div className="w-full h-full bg-secondary flex items-center justify-center text-2xl font-bold text-muted-foreground">
+                                            {onboardingData.username[0]?.toUpperCase() || 'U'}
+                                        </div>
+                                    )}
+                                </div>
+                                <div className="absolute -bottom-2 -right-0 bg-yellow-400 text-yellow-950 text-xs font-bold px-2 py-1 rounded-full shadow-lg border-2 border-background flex items-center gap-1">
+                                    <Sparkles size={10} />
+                                    NewUser
+                                </div>
+                            </div>
+
+                            <div className="space-y-2">
+                                <h2 className="text-2xl font-bold text-foreground">
+                                    Welcome, {onboardingData.username}!
+                                </h2>
+                                <p className="text-muted-foreground text-sm font-medium">
+                                    Your workspace is ready.
+                                </p>
+                            </div>
+
+                            <div className="bg-secondary/30 border border-border/50 rounded-2xl p-5 text-left space-y-3">
+                                <div className="flex items-start gap-3">
+                                    <div className="p-2 bg-primary/10 rounded-lg text-primary shrink-0 mt-0.5">
+                                        <Sparkles size={16} />
+                                    </div>
+                                    <div>
+                                        <h4 className="font-bold text-sm text-foreground">50 Free Credits & NewUser Role</h4>
+                                        <p className="text-xs text-muted-foreground leading-relaxed mt-1">
+                                            You are allotted 50 credits and a role of <span className="text-primary font-semibold">NewUser</span>.
+                                            After 50 credits end, your role will be shifted to <span className="font-semibold text-foreground">Freebiee</span> automatically,
+                                            and after that you will be getting 5 credits/month only unless role changed to Common or Wealthy.
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+
                             {error && (
-                                <div className="mb-4 p-3 bg-red-500/10 border border-red-500/20 rounded-xl">
+                                <div className="mb-4 p-3 bg-red-500/10 border border-red-500/20 rounded-xl w-full">
                                     <p className="text-red-400 text-xs font-medium text-center">{error}</p>
                                 </div>
                             )}
@@ -613,9 +778,9 @@ const AuthModal = ({ isOpen, onClose, startStep = 0, mode = 'default', user }) =
                             <button
                                 onClick={handleOnboardingSubmit}
                                 disabled={loading}
-                                className="w-full bg-foreground hover:opacity-90 text-background font-bold py-3.5 rounded-xl transition-all flex items-center justify-center gap-2 shadow-lg hover:shadow-xl hover:scale-[1.01] active:scale-[0.99]"
+                                className="w-full bg-foreground hover:opacity-90 text-background font-bold py-3.5 rounded-xl transition-all flex items-center justify-center gap-2 shadow-lg hover:shadow-xl hover:scale-[1.01] active:scale-[0.99] mt-2"
                             >
-                                {loading ? 'Saving...' : 'Finish Setup'}
+                                {loading ? 'Setting up...' : 'Get Started'} <ArrowRight size={16} />
                             </button>
                         </motion.div>
                     )}

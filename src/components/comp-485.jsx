@@ -534,16 +534,16 @@ export default function Component() {
           {/* Filter by status */}
           <Popover>
             <PopoverTrigger asChild>
-              <Button variant="outline">
-                <FilterIcon aria-hidden="true" className="-ms-1 opacity-60" size={16} />
-                Status
+              <Button variant="outline" className="px-2 md:px-3 gap-2">
+                <FilterIcon aria-hidden="true" className="opacity-60" size={16} />
+                <span className="hidden md:inline">Status</span>
                 {selectedStatuses.length > 0 && (
                   <span
-                    className="-me-1 inline-flex h-5 max-h-full items-center rounded border bg-background px-1 font-[inherit] font-medium text-[0.625rem] text-muted-foreground/70">
+                    className="hidden md:inline-flex -me-1 h-5 max-h-full items-center rounded border bg-background px-1 font-[inherit] font-medium text-[0.625rem] text-muted-foreground/70">
                     {selectedStatuses.length}
                   </span>
                 )}
-                <ChevronDownIcon className="ml-2 opacity-50" size={14} />
+                <ChevronDownIcon className="hidden md:inline ml-2 opacity-50" size={14} />
               </Button>
             </PopoverTrigger>
             <PopoverContent align="start" className="w-auto min-w-36 p-3">
@@ -577,9 +577,9 @@ export default function Component() {
           {/* Toggle columns visibility */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="outline">
-                <Columns3Icon aria-hidden="true" className="-ms-1 opacity-60" size={16} />
-                View
+              <Button variant="outline" className="px-2 md:px-3 gap-2">
+                <Columns3Icon aria-hidden="true" className="opacity-60" size={16} />
+                <span className="hidden md:inline">View</span>
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
@@ -609,11 +609,11 @@ export default function Component() {
           {table.getSelectedRowModel().rows.length > 0 && (
             <AlertDialog>
               <AlertDialogTrigger asChild>
-                <Button className="ml-auto" variant="outline">
-                  <TrashIcon aria-hidden="true" className="-ms-1 opacity-60" size={16} />
-                  Delete
+                <Button className="ml-auto px-2 md:px-3 gap-2" variant="outline">
+                  <TrashIcon aria-hidden="true" className="opacity-60" size={16} />
+                  <span className="hidden md:inline">Delete</span>
                   <span
-                    className="-me-1 inline-flex h-5 max-h-full items-center rounded border bg-background px-1 font-[inherit] font-medium text-[0.625rem] text-muted-foreground/70">
+                    className="hidden md:inline-flex -me-1 h-5 max-h-full items-center rounded border bg-background px-1 font-[inherit] font-medium text-[0.625rem] text-muted-foreground/70">
                     {table.getSelectedRowModel().rows.length}
                   </span>
                 </Button>
@@ -650,9 +650,9 @@ export default function Component() {
           )}
 
           {table.getSelectedRowModel().rows.length > 0 && (
-            <Button variant="destructive" onClick={handleBulkBan} className="ml-auto">
-              <CircleAlertIcon className="mr-2" size={16} />
-              Ban Selected
+            <Button variant="destructive" onClick={handleBulkBan} className="ml-auto px-2 md:px-3 gap-2">
+              <CircleAlertIcon size={16} />
+              <span className="hidden md:inline">Ban Selected</span>
             </Button>
           )}
 
@@ -677,6 +677,7 @@ export default function Component() {
                         <SelectItem value="freebiee">Freebiee</SelectItem>
                         <SelectItem value="common">Common</SelectItem>
                         <SelectItem value="banned">Banned</SelectItem>
+                        <SelectItem value="newuser">NewUser</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>

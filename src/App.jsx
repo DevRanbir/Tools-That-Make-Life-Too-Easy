@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Analytics } from '@vercel/analytics/react';
 import LoadingScreen from './components/LoadingScreen';
 import Sidebar from './components/Sidebar';
 import RightSidebar from './components/RightSidebar';
@@ -16,6 +17,14 @@ import TagsPage from './pages/Tags';
 import TodosPage from './pages/Todos';
 import NotesPage from './pages/Notes';
 import SearchOverlay from './components/SearchOverlay';
+import Flowcharts from './pages/Flowcharts';
+import Images from './pages/Images';
+import Emails from './pages/Emails';
+import Research from './pages/Research';
+import Presentations from './pages/Presentations';
+import Documents from './pages/Documents';
+import CaseStudies from './pages/CaseStudies';
+import ErrorPage from './pages/ErrorPage';
 // import ForYou from './pages/ForYou'; // Reusing Trending for now as requested "same as 2nd"
 
 import { supabase } from './supabase';
@@ -28,6 +37,11 @@ const App = () => {
 
   // Initial loading effect
   const timerRef = React.useRef(null);
+  const isFirstAuthEvent = useRef(true);
+
+  const INITIAL_CHAT_MESSAGES = [
+    { id: Date.now(), role: 'ai', content: "Hi there! I'm Bianca, a friendly AI assistant from Tools That Make Life Too Easy. I can help you with a variety of tasks using my specialized agents." }
+  ];
 
   const clearTimers = () => {
     if (timerRef.current) {
@@ -98,7 +112,15 @@ const App = () => {
     if (path === '/calendar') return 'calendar';
     if (path === '/data') return 'data';
     if (path === '/for-you') return 'home';
-    return 'manual';
+    if (path === '/flowcharts') return 'flowcharts';
+    if (path === '/images') return 'images';
+    if (path === '/emails') return 'emails';
+    if (path === '/research') return 'research';
+    if (path === '/presentations') return 'presentations';
+    if (path === '/documents') return 'documents';
+    if (path === '/case-studies') return 'case-studies';
+    if (path === '/' || path === '') return 'manual';
+    return 'error';
   });
   const [showAuthModal, setShowAuthModal] = useState(false);
   /* MOVED user STATE DECLARATION UP */
@@ -112,18 +134,52 @@ const App = () => {
     } catch (e) {
       console.warn("Error loading chat history:", e);
     }
-    return [
-      { id: Date.now(), role: 'ai', content: "Hello! I'm your AI assistant. I'm currently in beta mode, but feel free to ask me anything about the tools available here!" }
-    ];
+    return INITIAL_CHAT_MESSAGES;
   });
 
-  // Persist chat history
+  // Persist chat history only if user is logged in
   useEffect(() => {
-    localStorage.setItem('chat_history', JSON.stringify(chatMessages));
-  }, [chatMessages]);
+    if (user) {
+      localStorage.setItem('chat_history', JSON.stringify(chatMessages));
+    }
+  }, [chatMessages, user]);
+
+  const hasCheckedForReset = useRef(false);
+
+  // Inject reset prompt on reload if history exists
+  useEffect(() => {
+    if (!hasCheckedForReset.current) {
+      hasCheckedForReset.current = true;
+      if (chatMessages.length > 1) {
+        const lastMsg = chatMessages[chatMessages.length - 1];
+        if (!lastMsg.requiresReset) {
+          setChatMessages(prev => {
+            // Double check inside the state update to be safe
+            const currentLast = prev[prev.length - 1];
+            if (currentLast && !currentLast.requiresReset) {
+              return [...prev, {
+                id: Date.now(),
+                role: 'ai',
+                content: "I noticed you have an active session. Would you like to continue or start over?",
+                requiresReset: true
+              }];
+            }
+            return prev;
+          });
+        }
+      }
+    }
+  }, []);
+
+  const handleChatReset = () => {
+    setChatMessages(INITIAL_CHAT_MESSAGES);
+  };
   // activePage determines which page component to render
 
-  const handlePageChange = (newPage) => {
+  const [targetSection, setTargetSection] = useState(null);
+
+  const handlePageChange = (newPage, section = null) => {
+    if (section) setTargetSection(section);
     if (newPage === activePage) return;
 
     // Clear hash when changing pages to prevent search queries from persisting
@@ -229,7 +285,15 @@ const App = () => {
       else if (path === '/calendar') setActivePage('calendar');
       else if (path === '/data') setActivePage('data');
       else if (path === '/for-you') setActivePage('home');
-      else setActivePage('manual'); // Default to manual (root)
+      else if (path === '/flowcharts') setActivePage('flowcharts');
+      else if (path === '/images') setActivePage('images');
+      else if (path === '/emails') setActivePage('emails');
+      else if (path === '/research') setActivePage('research');
+      else if (path === '/presentations') setActivePage('presentations');
+      else if (path === '/documents') setActivePage('documents');
+      else if (path === '/case-studies') setActivePage('case-studies');
+      else if (path === '/' || path === '') setActivePage('manual');
+      else setActivePage('error');
     };
 
     window.addEventListener('popstate', handlePopState);
@@ -253,7 +317,15 @@ const App = () => {
     else if (activePage === 'calendar') { path = '/calendar'; pageTitle = 'Calendar'; }
     else if (activePage === 'data') { path = '/data'; pageTitle = 'Data'; }
     else if (activePage === 'home') { path = '/for-you'; pageTitle = 'For You'; }
-    else { path = '/'; pageTitle = 'Manual'; } // manual
+    else if (activePage === 'flowcharts') { path = '/flowcharts'; pageTitle = 'Flowcharts'; }
+    else if (activePage === 'images') { path = '/images'; pageTitle = 'Images'; }
+    else if (activePage === 'emails') { path = '/emails'; pageTitle = 'Emails'; }
+    else if (activePage === 'research') { path = '/research'; pageTitle = 'Research'; }
+    else if (activePage === 'presentations') { path = '/presentations'; pageTitle = 'Presentations'; }
+    else if (activePage === 'documents') { path = '/documents'; pageTitle = 'Documents'; }
+    else if (activePage === 'case-studies') { path = '/case-studies'; pageTitle = 'Case Studies'; }
+    else if (activePage === 'manual') { path = '/'; pageTitle = 'Manual'; }
+    else { path = '/error'; pageTitle = 'Page Not Found'; }
 
     document.title = `${pageTitle} - Tools That Make Life Too Easy`;
 
@@ -280,15 +352,15 @@ const App = () => {
 
       const { data: details, error } = await supabase
         .from('user_details')
-        .select('role, credits, setting_preferences, avatar_preference, avatar_url')
+        .select('role, credits, setting_preferences, avatar_preference, avatar_url, occupation, username, sort_preference')
         .eq('id', currentUser.id)
-        .single();
+        .maybeSingle();
 
-      if (error && error.code !== 'PGRST116') { // Ignore "no rows" error for new users initially
+      if (error) {
         console.error("Error fetching user details:", error);
       }
 
-      const role = details?.role || 'freebiee';
+      const role = details?.role || 'NewUser';
       const credits = details?.credits ?? 0;
       const settingPreferences = details?.setting_preferences || {};
       // Prioritize database avatar details
@@ -306,7 +378,10 @@ const App = () => {
           avatar_preference: dbAvatarPreference, // Store preference
           // If we have a DB avatar and verify it's preferred or exists, use it.
           // This ensures if 'custom' is set, we use the dbAvatarUrl.
-          ...(dbAvatarUrl ? { avatar_url: dbAvatarUrl } : {})
+          ...(dbAvatarUrl ? { avatar_url: dbAvatarUrl } : {}),
+          occupation: details?.occupation,
+          username: details?.username || currentUser.user_metadata?.username,
+          sort_preference: details?.sort_preference || currentUser.user_metadata?.sort_preference
         }
       });
     };
@@ -316,7 +391,20 @@ const App = () => {
       fetchUserDetails(user);
     });
 
-    const { data: { subscription: authListener } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: { subscription: authListener } } = supabase.auth.onAuthStateChange((event, session) => {
+      // Check if this is an explicit Login or Logout event (not initial session restore)
+      if (isFirstAuthEvent.current) {
+        isFirstAuthEvent.current = false;
+      } else {
+        if (event === 'SIGNED_IN') {
+          setChatMessages(INITIAL_CHAT_MESSAGES);
+        }
+        if (event === 'SIGNED_OUT') {
+          setChatMessages(INITIAL_CHAT_MESSAGES);
+          localStorage.removeItem('chat_history');
+        }
+      }
+
       if (session?.user) {
         fetchUserDetails(session.user);
       } else {
@@ -363,10 +451,9 @@ const App = () => {
         const googlePic = user.user_metadata?.picture;
         const currentAvatar = user.user_metadata?.avatar_url;
 
-        // 0. Check if preference already set - if so, we are good.
-        if (user.user_metadata?.avatar_preference) {
-          return;
-        }
+        // 0. Check if username and occupation are set. If so, we can possibly skip.
+        // But better to check specifically what is missing.
+
 
         // 1. Check for missing username (New User)
         if (!hasUsername) {
@@ -374,6 +461,35 @@ const App = () => {
           setShowAuthModal(true);
           return;
         }
+
+        const hasOccupation = user.user_metadata?.occupation;
+        if (!hasOccupation) {
+          setAuthStartStep(2);
+          setShowAuthModal(true);
+          return;
+        }
+
+        const hasSortPref = user.user_metadata?.sort_preference;
+        if (!hasSortPref) {
+          setAuthStartStep(3);
+          setShowAuthModal(true);
+          return;
+        }
+
+        const settingParams = user.user_metadata?.setting_preferences || {};
+
+        if (!settingParams.manage_sidebar_mode) {
+          setAuthStartStep(4);
+          setShowAuthModal(true);
+          return;
+        }
+
+        if (!settingParams.tool_deck_preference) {
+          setAuthStartStep(5);
+          setShowAuthModal(true);
+          return;
+        }
+
 
         // 2. Check for PFP Conflict (Bucket vs Google)
         // If user has a Google Pic AND (Current Avatar is that Google Pic OR missing OR they match)
@@ -410,9 +526,18 @@ const App = () => {
     }
   }, [user]);
 
-  const updateSortPreference = async (newSort) => {
+  // Reset sort preference to saved user preference when changing valid pages
+  useEffect(() => {
+    if (user && user.user_metadata?.sort_preference) {
+      setSortPreference(user.user_metadata.sort_preference);
+    } else {
+      setSortPreference('trending'); // Default for guests
+    }
+  }, [activePage, user?.user_metadata?.sort_preference]);
+
+  const updateSortPreference = async (newSort, persist = false) => {
     setSortPreference(newSort);
-    if (user) {
+    if (persist && user) {
       const { error } = await supabase.auth.updateUser({
         data: { sort_preference: newSort }
       });
@@ -489,9 +614,9 @@ const App = () => {
 
   const renderContent = () => {
     switch (activePage) {
-      case 'home': return user ? <Manual navigateOnly={handlePageChange} pageName="For You" user={user} sortPreference={sortPreference} /> : <Manual navigateOnly={handlePageChange} pageName="Manual" user={user} sortPreference={sortPreference} />;
-      case 'fastmode': return <FastMode navigateOnly={handlePageChange} user={user} messages={chatMessages} setMessages={setChatMessages} onAuthClick={handleAuthClick} />;
-      case 'manual': return <Manual navigateOnly={handlePageChange} pageName="Manual" user={user} sortPreference={sortPreference} />;
+      case 'home': return user ? <Manual navigateOnly={handlePageChange} pageName="For You" user={user} sortPreference={sortPreference} targetSection={targetSection} onAuthClick={handleAuthClick} /> : <Manual navigateOnly={handlePageChange} pageName="Manual" user={user} sortPreference={sortPreference} onAuthClick={handleAuthClick} />;
+      case 'fastmode': return <FastMode navigateOnly={handlePageChange} user={user} messages={chatMessages} setMessages={setChatMessages} onAuthClick={handleAuthClick} onChatReset={handleChatReset} />;
+      case 'manual': return <Manual navigateOnly={handlePageChange} pageName="Manual" user={user} sortPreference={sortPreference} onAuthClick={handleAuthClick} />;
       case 'search': return <SearchPage navigateOnly={handlePageChange} user={user} sortPreference={sortPreference} />;
       case 'todos': return user ? <TodosPage
         navigateOnly={handlePageChange}
@@ -507,13 +632,21 @@ const App = () => {
         togglePin={togglePin}
         editTodo={editTodo}
         editSubtask={editSubtask}
-      /> : <Manual navigateOnly={handlePageChange} pageName="Manual" user={user} sortPreference={sortPreference} />;
-      case 'notes': return user ? <NotesPage navigateOnly={handlePageChange} user={user} sortPreference={sortPreference} darkMode={darkMode} /> : <Manual navigateOnly={handlePageChange} pageName="Manual" user={user} sortPreference={sortPreference} />;
+      /> : <Manual navigateOnly={handlePageChange} pageName="Manual" user={user} sortPreference={sortPreference} onAuthClick={handleAuthClick} />;
+      case 'notes': return user ? <NotesPage navigateOnly={handlePageChange} user={user} sortPreference={sortPreference} darkMode={darkMode} /> : <Manual navigateOnly={handlePageChange} pageName="Manual" user={user} sortPreference={sortPreference} onAuthClick={handleAuthClick} />;
       case 'tags': return <TagsPage navigateOnly={handlePageChange} user={user} sortPreference={sortPreference} />;
       case 'shop': return <ShopPage navigateOnly={handlePageChange} user={user} sortPreference={sortPreference} />;
-      case 'calendar': return user ? <CalendarPage navigateOnly={handlePageChange} user={user} sortPreference={sortPreference} /> : <Manual navigateOnly={handlePageChange} pageName="Manual" user={user} sortPreference={sortPreference} />;
-      case 'data': return user ? <DataPage navigateOnly={handlePageChange} user={user} sortPreference={sortPreference} darkMode={darkMode} /> : <Manual navigateOnly={handlePageChange} pageName="Manual" user={user} sortPreference={sortPreference} />;
-      case 'manage': return (user && user.user_metadata?.role === 'administrator') ? <Manage navigateOnly={handlePageChange} /> : <Manual navigateOnly={handlePageChange} pageName="Manual" user={user} sortPreference={sortPreference} />;
+      case 'calendar': return user ? <CalendarPage navigateOnly={handlePageChange} user={user} sortPreference={sortPreference} /> : <Manual navigateOnly={handlePageChange} pageName="Manual" user={user} sortPreference={sortPreference} onAuthClick={handleAuthClick} />;
+      case 'data': return user ? <DataPage navigateOnly={handlePageChange} user={user} sortPreference={sortPreference} darkMode={darkMode} /> : <Manual navigateOnly={handlePageChange} pageName="Manual" user={user} sortPreference={sortPreference} onAuthClick={handleAuthClick} />;
+      case 'flowcharts': return <Flowcharts user={user} />;
+      case 'images': return <Images user={user} />;
+      case 'emails': return <Emails user={user} />;
+      case 'research': return <Research user={user} />;
+      case 'presentations': return <Presentations user={user} />;
+      case 'documents': return <Documents user={user} />;
+      case 'case-studies': return <CaseStudies user={user} />;
+      case 'manage': return (user && user.user_metadata?.role === 'administrator') ? <Manage navigateOnly={handlePageChange} /> : <Manual navigateOnly={handlePageChange} pageName="Manual" user={user} sortPreference={sortPreference} onAuthClick={handleAuthClick} />;
+      case 'error': return <ErrorPage navigateOnly={handlePageChange} pageName="Page Not Found" user={user} sortPreference={sortPreference} />;
       default: return <Home navigateOnly={handlePageChange} sortPreference={sortPreference} />;
     }
   };
@@ -815,11 +948,6 @@ const App = () => {
   };
 
 
-  // ...
-
-  // Removed simple early return. Logic moved to overlay below.
-
-
   return (
     <div className="layout">
       <div className="main-body">
@@ -895,7 +1023,7 @@ const App = () => {
           onClose={() => setIsSearchOpen(false)}
         />
       )}
-
+      <Analytics />
     </div>
   );
 };

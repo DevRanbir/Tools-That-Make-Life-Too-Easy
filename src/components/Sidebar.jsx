@@ -150,30 +150,31 @@ const Sidebar = ({
                 onMouseLeave={handleMouseLeave}
             >
                 <div className={`sidebar-toggle-wrapper w-full`}>
-                    <span className={`sidebar-toggle-label text-[10px] font-bold tracking-wider transition-opacity duration-300 ${isExpanded ? 'opacity-100' : 'opacity-60'}`}>
+                    <span className={`sidebar-toggle-label text-[10px] font-bold tracking-wider transition-all duration-200 ease ${isExpanded ? 'opacity-100' : 'opacity-60 pl-0'}`}>
                         THEME
                     </span>
 
-                    {/* New Theme Toggle Component - Vertical */}
-                    <div className="mt-2">
-                        <div className="relative inline-grid h-16 w-8 grid-rows-[1fr_1fr] items-center justify-items-center font-medium text-sm">
-                            <Switch
-                                checked={isChecked}
-                                onCheckedChange={handleCheckedChange}
-                                className="peer absolute inset-0 h-full w-full rounded-full border border-zinc-800 transition-colors data-[state=unchecked]:bg-zinc-950 data-[state=checked]:bg-white [&_span]:absolute [&_span]:top-0 [&_span]:left-0 [&_span]:z-10 [&_span]:w-full [&_span]:h-1/2 [&_span]:transition-transform [&_span]:duration-300 [&_span]:ease-[cubic-bezier(0.16,1,0.3,1)] [&_span]:data-[state=checked]:translate-y-full [&_span]:data-[state=checked]:bg-black [&_span]:data-[state=unchecked]:bg-white [&_span]:shadow-sm"
-                                id={switchId}
+                    <div className={`mt-2 w-full flex justify-start transition-[padding] duration-200 ease ${isExpanded ? 'pl-0' : 'pl-0'}`}>
+                        <button
+                            onClick={() => handleCheckedChange(!isChecked)}
+                            className={`group relative inline-flex h-16 w-9 shrink-0 cursor-pointer flex-col items-center justify-between rounded-full border border-zinc-800 transition-all duration-300 focus-visible:outline-none focus:opacity-100 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 opacity-60 hover:opacity-100 ${isChecked ? 'bg-white' : 'bg-black'}`}
+                            aria-label="Toggle Theme"
+                        >
+                            <span
+                                className={`absolute left-0 w-full h-8 rounded-full bg-current transition-transform duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] shadow-sm z-10 ${isChecked ? 'translate-y-full bg-black' : 'translate-y-0 bg-white'}`}
                             />
-                            <span className="pointer-events-none relative z-20 flex h-full w-full items-center justify-center transition-opacity duration-300 peer-data-[state=checked]:opacity-0">
-                                <MoonIcon aria-hidden="true" size={14} className="text-black" />
-                            </span>
-                            <span className="pointer-events-none relative z-20 flex h-full w-full items-center justify-center transition-opacity duration-300 peer-data-[state=unchecked]:opacity-0">
-                                <SunIcon aria-hidden="true" size={14} className="text-white" />
-                            </span>
-                        </div>
+
+                            <div className="relative z-20 flex h-8 w-full items-center justify-center">
+                                <MoonIcon size={14} className={`transition-all duration-300 ${isChecked ? 'opacity-0 scale-50' : 'opacity-100 scale-100 text-black'}`} />
+                            </div>
+                            <div className="relative z-20 flex h-8 w-full items-center justify-center">
+                                <SunIcon size={14} className={`transition-all duration-300 ${isChecked ? 'opacity-100 scale-100 text-white' : 'opacity-0 scale-50'}`} />
+                            </div>
+                        </button>
                     </div>
                 </div>
 
-                <div className="flex flex-col gap-2 w-full mt-6">
+                <div className="flex flex-col gap-2 w-full mt-2">
                     {menuItems.map((item) => (
                         <div
                             key={item.id}
@@ -228,11 +229,11 @@ const Sidebar = ({
                                 if (setIsSettingsOpen) setIsSettingsOpen(true);
                             }}
                         >
-                            <div className="relative">
+                            <div className="relative shrink-0">
                                 {user.user_metadata?.avatar_url ? (
-                                    <img src={user.user_metadata.avatar_url} alt="Profile" className="w-8 h-8 min-w-[32px] rounded-full object-cover" />
+                                    <img src={user.user_metadata.avatar_url} alt="Profile" className="w-8 h-8 min-w-[32px] min-h-[32px] rounded-full object-cover aspect-square shrink-0" />
                                 ) : (
-                                    <div className="w-8 h-8 min-w-[32px] rounded-full bg-primary/20 flex items-center justify-center text-xs font-bold text-primary">
+                                    <div className="w-8 h-8 min-w-[32px] min-h-[32px] rounded-full bg-primary/20 flex items-center justify-center text-xs font-bold text-primary aspect-square shrink-0">
                                         {user.email?.[0].toUpperCase()}
                                     </div>
                                 )}
@@ -280,7 +281,7 @@ const Sidebar = ({
                             className="sidebar-icon justify-center hover:bg-zinc-800/50 text-muted-foreground hover:text-foreground cursor-pointer"
                             title="Hide Sidebar"
                         >
-                            <ChevronsLeft size={22} className="min-w-[22px] -ml-6" />
+                            <ChevronsLeft size={22} className="min-w-[22px] ml-0" />
                         </div>
                     </div>
                 </div>
@@ -288,14 +289,14 @@ const Sidebar = ({
 
             {/* Mobile Show Button - Floating at bottom left */}
             <div
-                className={`fixed bottom-4 left-4 z-50 md:hidden transition-all duration-300 ${isMobileHidden ? 'opacity-100 scale-100 translate-x-0 z-100000000' : 'opacity-0 scale-0 -translate-x-full pointer-events-none'}`}
+                className={`fixed bottom-[50%] left-0 z-50 md:hidden transition-all duration-300 ${isMobileHidden ? 'opacity-100 translate-x-0' : 'opacity-0 -translate-x-full pointer-events-none'}`}
             >
                 <button
                     onClick={() => setIsMobileHidden(false)}
-                    className="flex items-center justify-center w-10 h-10 rounded-full bg-card border border-border shadow-lg text-muted-foreground hover:text-foreground hover:bg-secondary"
+                    className="flex items-center justify-center w-14 h-14 rounded-r-md bg-card border border-l-0 border-border shadow-md text-muted-foreground hover:text-foreground hover:bg-secondary"
                     aria-label="Show Sidebar"
                 >
-                    <ChevronsRight size={20} />
+                    <ChevronsRight size={26} />
                 </button>
             </div>
         </>

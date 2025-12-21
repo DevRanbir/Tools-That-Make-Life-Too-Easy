@@ -99,6 +99,29 @@ export function EventCalendar({
     };
   }, [isEventDialogOpen]);
 
+  useEffect(() => {
+    const checkHash = () => {
+      const hash = window.location.hash;
+      if (hash && hash.startsWith('#event-')) {
+        const eventId = hash.replace('#event-', '');
+        const event = events.find(e => String(e.id) === eventId);
+        if (event) {
+          setSelectedEvent(event);
+          setIsEventDialogOpen(true);
+          setCurrentDate(new Date(event.start));
+        }
+      }
+    };
+
+    // Check immediately
+    checkHash();
+
+    // Listen for changes (collisions between sidebar nav and data load)
+    window.addEventListener('hashchange', checkHash);
+    return () => window.removeEventListener('hashchange', checkHash);
+  }, [events]);
+
+
   const handlePrevious = () => {
     if (view === "month") {
       setCurrentDate(subMonths(currentDate, 1));
@@ -368,6 +391,7 @@ export function EventCalendar({
           onClose={() => {
             setIsEventDialogOpen(false);
             setSelectedEvent(null);
+            window.history.replaceState(null, null, ' ');
           }}
           onDelete={handleEventDelete}
           onSave={handleEventSave} />

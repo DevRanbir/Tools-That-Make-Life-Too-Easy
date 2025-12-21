@@ -7,6 +7,7 @@ import mermaid from 'mermaid';
 import { TextShimmer } from '../components/motion-primitives/text-shimmer';
 import MagneticMorphingNav from '../components/MagneticMorphingNav';
 import { supabase } from '../supabase';
+import { logTransaction } from '../utils/logTransaction';
 import {
     Loader2, X, Download, ZoomIn, ZoomOut, Code, Info,
     Hand, Trash2, Search as SearchIcon, BookOpen, FileText,
@@ -49,6 +50,235 @@ const ImageSkeleton = () => (
         </div>
     </div>
 );
+
+const downloadSvgAsPng = async (svgContent, filename) => {
+    if (!svgContent) return;
+    try {
+        const parser = new DOMParser();
+        const svgDoc = parser.parseFromString(svgContent, 'image/svg+xml');
+        const svgElement = svgDoc.querySelector('svg');
+        if (!svgElement) return;
+
+        const viewBox = svgElement.getAttribute('viewBox');
+        let width, height;
+        if (viewBox) {
+            const [, , vbWidth, vbHeight] = viewBox.split(' ').map(Number);
+            width = vbWidth;
+            height = vbHeight;
+        } else {
+            width = parseFloat(svgElement.getAttribute('width')) || 800;
+            height = parseFloat(svgElement.getAttribute('height')) || 600;
+        }
+
+        svgElement.setAttribute('width', width);
+        svgElement.setAttribute('height', height);
+
+        const serializer = new XMLSerializer();
+        const svgString = serializer.serializeToString(svgElement);
+        const svgData = encodeURIComponent(svgString);
+        const dataUrl = `data:image/svg+xml;charset=utf-8,${svgData}`;
+
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        const scale = 3;
+        canvas.width = width * scale;
+        canvas.height = height * scale;
+
+        const img = new Image();
+        img.onload = () => {
+            ctx.fillStyle = 'white';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+            canvas.toBlob((blob) => {
+                const link = document.createElement('a');
+                link.href = URL.createObjectURL(blob);
+                link.download = filename;
+                link.click();
+                URL.revokeObjectURL(link.href);
+            }, 'image/png', 1.0);
+        };
+        img.src = dataUrl;
+    } catch (err) {
+        console.error('Download failed', err);
+    }
+};
+
+const sanitizeMermaidCode = (code) => {
+    if (!code) return '';
+    let clean = code.trim();
+    clean = clean.replace(/^```mermaid\n?/, '').replace(/```$/, '').trim();
+
+    // Auto-quote labels if they aren't quoted. ID[Text] -> ID["Text"]
+    // This handles [], (), {}, >]
+    clean = clean.replace(/(\w+)\[([^"\]\n][^\]\n]*)\]/g, '$1["$2"]');
+    clean = clean.replace(/(\w+)\(([^" \)\n][^\)\n]*)\)/g, '$1("$2")');
+    clean = clean.replace(/(\w+)\{([^"\}n][^\}\n]*)\}/g, '$1{"$2"}');
+    clean = clean.replace(/(\w+)>([^"\]\n][^\]\n]*)\]/g, '$1>["$2"]');
+
+    // Fix unescaped quotes inside labels
+    clean = clean.replace(/\["([^"]*)"\]/g, (match, p1) => `["${p1.replace(/"/g, "'")}"]`);
+    clean = clean.replace(/\("([^"]*)"\)/g, (match, p1) => `("${p1.replace(/"/g, "'")}")`);
+
+    return clean;
+};
+
+// Flowchart Renderer Component with Modal
+const FlowchartRenderer = ({ flowchart, index, mermaidInitialized, onClick }) => {
+    const [svgContent, setSvgContent] = useState(null);
+    const [error, setError] = useState(null);
+    const [isRendering, setIsRendering] = useState(true);
+
+    useEffect(() => {
+        let isMounted = true;
+
+        const renderDiagram = async () => {
+            try {
+                setIsRendering(true);
+                setError(null);
+
+                const codeToRender = flowchart.trim();
+                const uniqueId = `mermaid-${index}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+
+                // Suppress Mermaid's error output
+                const originalError = console.error;
+                console.error = (...args) => {
+                    const msg = args.join(' ');
+                    if (msg.includes('Syntax error') || msg.includes('mermaid')) {
+                        return;
+                    }
+                    originalError.apply(console, args);
+                };
+
+                try {
+                    if (mermaidInitialized && !mermaidInitialized.current) {
+                        mermaid.initialize({
+                            startOnLoad: false,
+                            theme: 'default',
+                            securityLevel: 'loose',
+                            flowchart: {
+                                useMaxWidth: true,
+                                htmlLabels: true,
+                                curve: 'basis'
+                            },
+                            logLevel: 'error'
+                        });
+                        if (mermaidInitialized) mermaidInitialized.current = true;
+                    }
+
+                    // Pre-process code to clean up common issues
+                    let cleanCode = sanitizeMermaidCode(codeToRender);
+
+                    let { svg } = await mermaid.render(uniqueId, cleanCode);
+
+                    // Check if mermaid returned an error SVG instead of throwing
+                    if (svg.includes('Syntax error in text') || svg.includes('mermaid-error')) {
+                        throw new Error('Mermaid Syntax Error Detected');
+                    }
+
+                    if (isMounted) {
+                        setSvgContent(svg);
+                        setIsRendering(false);
+                    }
+                } catch (renderError) {
+                    // Try one more time with a very strict cleanup if first attempt fails
+                    try {
+                        const simpleCode = sanitizeMermaidCode(codeToRender)
+                            .replace(/\|([^|]*)\|/g, (match, p1) => `|${p1.replace(/['"\[\]]/g, '')}|`)
+                            .replace(/'/g, '')
+                            .replace(/"/g, '');
+
+                        let { svg } = await mermaid.render(uniqueId + '-retry', simpleCode);
+
+                        if (svg.includes('Syntax error in text') || svg.includes('mermaid-error')) {
+                            throw new Error('Mermaid Retry Syntax Error');
+                        }
+                        if (isMounted) {
+                            setSvgContent(svg);
+                            setIsRendering(false);
+                            return;
+                        }
+                    } catch (retryError) {
+                        // Fall through to error state
+                    }
+
+                    if (isMounted) {
+                        setError(renderError.message || renderError.toString());
+                        setIsRendering(false);
+                    }
+                } finally {
+                    console.error = originalError;
+                }
+            } catch (e) {
+                if (isMounted) {
+                    setError(e.message || e.toString());
+                    setIsRendering(false);
+                }
+            }
+        };
+
+        renderDiagram();
+
+        return () => {
+            isMounted = false;
+        };
+    }, [flowchart, index, mermaidInitialized]);
+
+    return (
+        <div className="w-full relative group">
+            <button
+                onClick={onClick}
+                className="w-full flex flex-col relative isolate"
+            >
+                <div className="relative w-full h-40 rounded-xl overflow-hidden border border-border/50 shadow-sm z-10 bg-muted/20 flex items-start justify-center pt-4">
+                    <div className="absolute inset-0 bg-muted/20" />
+                    {isRendering ? (
+                        <div className="flex flex-col items-center gap-2">
+                            <Loader2 size={24} className="text-muted-foreground animate-spin" />
+                            <span className="text-xs text-muted-foreground">Rendering...</span>
+                        </div>
+                    ) : error ? (
+                        <div className="flex flex-col items-center gap-2 text-destructive">
+                            <AlertCircle size={24} />
+                            <span className="text-xs">Failed to render</span>
+                        </div>
+                    ) : svgContent && (
+                        <div
+                            dangerouslySetInnerHTML={{ __html: svgContent }}
+                            className="w-full h-full flex items-start justify-center p-4 pointer-events-none opacity-80"
+                            style={{
+                                zoom: '0.4' // Crude way to fit larger diagrams
+                            }}
+                        />
+                    )}
+                </div>
+
+                <div className="relative -mt-3 w-[95%] mx-auto p-3 pt-5 bg-secondary/95 backdrop-blur-sm rounded-b-xl border-x border-b border-border/50 shadow-sm z-0 transform group-hover:translate-y-2 transition-transform duration-300 ease-out text-left">
+                    <div className="flex flex-col gap-1 min-w-0">
+                        <div className="text-sm font-medium text-foreground line-clamp-1">
+                            Flowchart Diagram
+                        </div>
+                        <div className="text-[10px] bg-primary/10 text-primary px-1.5 py-0.5 rounded w-fit font-semibold uppercase tracking-wider border border-primary/20">
+                            MERMAID
+                        </div>
+                    </div>
+                </div>
+            </button>
+
+            {/* Direct Download Button */}
+            <button
+                onClick={(e) => {
+                    e.stopPropagation();
+                    downloadSvgAsPng(svgContent, `flowchart-${index}-${Date.now()}.png`);
+                }}
+                className="absolute top-2 right-2 z-20 p-2 bg-black/50 hover:bg-black/70 text-white rounded-full backdrop-blur-sm transition-all opacity-0 group-hover:opacity-100"
+                title="Download PNG"
+                disabled={!svgContent || isRendering || error}
+            >
+                <Download size={16} />
+            </button>
+        </div>
+    );
+};
 
 const ResultDrawer = ({ isOpen, onClose, content, title, type }) => {
     const [showInfo, setShowInfo] = useState(false);
@@ -149,13 +379,33 @@ const ResultDrawer = ({ isOpen, onClose, content, title, type }) => {
                 });
 
                 const id = `mermaid-drawer-${Date.now()}`;
-                const { svg } = await mermaid.render(id, content);
+
+                // Pre-process code to clean up common issues (Same as FlowchartRenderer)
+                let cleanCode = content
+                    .replace(/\[\s*"([^"]*)"\s*\]/g, '["$1"]')
+                    .replace(/'/g, '');
+
+                const { svg } = await mermaid.render(id, cleanCode);
 
                 if (isMounted) {
                     setSvgContent(svg);
                     setRenderError(null);
                 }
             } catch (err) {
+                // Retry logic (Same as FlowchartRenderer)
+                try {
+                    const id = `mermaid-drawer-${Date.now()}-retry`;
+                    const simpleCode = content.replace(/\|([^|]*)\|/g, (match, p1) => `|${p1.replace(/['"\[\]]/g, '')}|`);
+                    const { svg } = await mermaid.render(id, simpleCode);
+                    if (isMounted) {
+                        setSvgContent(svg);
+                        setRenderError(null);
+                        return;
+                    }
+                } catch (retryError) {
+                    // fall through
+                }
+
                 console.error("Mermaid render error:", err);
                 if (isMounted) {
                     setRenderError('Failed to render flowchart. Please check the code.');
@@ -172,14 +422,15 @@ const ResultDrawer = ({ isOpen, onClose, content, title, type }) => {
         if (!content) return;
 
         if (type === 'image') {
-            const link = document.createElement('a');
-            link.href = content; // content is URL for image
-            link.download = title || 'image.png';
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
+            downloadFile(content, title || 'image.png');
             return;
         }
+
+        if (type === 'flowchart') {
+            downloadSvgAsPng(svgContent, title || `flowchart-${Date.now()}.png`);
+            return;
+        }
+
 
         const mimeType = type === 'html' ? 'text/html' : 'text/markdown';
         const extension = type === 'html' ? 'html' : type === 'flowchart' ? 'mermaid' : 'md';
@@ -221,10 +472,10 @@ const ResultDrawer = ({ isOpen, onClose, content, title, type }) => {
                                         <div className="flex items-center gap-1 mr-2 px-2 py-1 bg-secondary/50 rounded-lg">
                                             <button
                                                 onClick={() => { setZoom(type === 'image' ? 1 : 2.5); setPan({ x: 0, y: 0 }); }}
-                                                className="p-1 hover:bg-background rounded-md transition-colors text-muted-foreground hover:text-foreground"
+                                                className="px-2 py-1 text-xs font-medium hover:bg-background rounded-md transition-colors text-muted-foreground hover:text-foreground border border-transparent hover:border-border/50"
                                                 title="Reset View"
                                             >
-                                                <Hand size={16} />
+                                                Reset
                                             </button>
                                             <div className="w-px h-4 bg-border/50 mx-1" />
                                             <button
@@ -317,7 +568,7 @@ const ResultDrawer = ({ isOpen, onClose, content, title, type }) => {
                     <div className="flex-1 w-full h-full overflow-hidden bg-background text-foreground relative">
                         {(type === 'flowchart' || type === 'image') && viewMode === 'preview' ? (
                             <div
-                                className="flex items-center justify-center w-full h-full overflow-hidden bg-dot-pattern"
+                                className={`flex ${type === 'flowchart' ? 'items-start pt-20' : 'items-center'} justify-center w-full h-full overflow-hidden bg-dot-pattern`}
                                 onWheel={handleWheel}
                                 style={{ cursor: 'default' }}
                             >
@@ -337,7 +588,7 @@ const ResultDrawer = ({ isOpen, onClose, content, title, type }) => {
                                     </div>
                                 ) : svgContent ? (
                                     <div
-                                        className="origin-center select-none pointer-events-none"
+                                        className={`${type === 'flowchart' ? 'origin-top' : 'origin-center'} select-none pointer-events-none`}
                                         style={{ transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})` }}
                                         dangerouslySetInnerHTML={{ __html: svgContent }}
                                     />
@@ -387,7 +638,7 @@ const ResultDrawer = ({ isOpen, onClose, content, title, type }) => {
                                 <div dangerouslySetInnerHTML={{ __html: content }} className="w-full h-full flex items-center justify-center" />
                             </div>
                         ) : type === 'email' ? (
-                            <div className="h-full overflow-hidden flex flex-col items-center justify-center p-4">
+                            <div className=" w-full h-full flex flex-col">
                                 <EmailViewer emailData={content} />
                             </div>
                         ) : (
@@ -429,7 +680,7 @@ const WhatsAppPreviewWithState = ({ previewData, taskIndex }) => {
                 message: data.message
             };
 
-            const response = await fetch('http://localhost:5001/api/whatsapp/send', {
+            const response = await fetch('/api/whatsapp/send', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(sendPayload)
@@ -463,7 +714,7 @@ const WhatsAppPreviewWithState = ({ previewData, taskIndex }) => {
         onRewrite={async () => {
             setRewriting(true);
             try {
-                const response = await fetch('http://localhost:5001/api/whatsapp/rewrite', {
+                const response = await fetch('/api/whatsapp/rewrite', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ message, tone: 'friendly' })
@@ -781,7 +1032,7 @@ const markdownToHtml = (markdown) => {
     // Images - handle before other processing
     html = html.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, (match, alt, url) => {
         // Handle relative URLs by prepending the backend URL
-        const imageUrl = url.startsWith('http') ? url : `http://localhost:5001${url}`;
+        const imageUrl = url.startsWith('http') ? url : `http://20.197.35.140:5001${url}`;
         return `<img src="${imageUrl}" alt="${alt || ''}" class="max-w-full h-auto rounded-lg my-4 border border-border" />`;
     });
 
@@ -797,8 +1048,9 @@ const markdownToHtml = (markdown) => {
     });
 
     // Bullet points
-    html = html.replace(/^- (.*$)/gim, '<li class="ml-4 mb-1">$1</li>');
-    html = html.replace(/(<li.*<\/li>)/s, '<ul class="list-disc ml-6 mb-3 space-y-1">$1</ul>');
+    html = html.replace(/^[-*] (.*$)/gim, '<li class="ml-4 mb-1">$1</li>');
+    // Wrap contiguous li elements in ul
+    html = html.replace(/((?:<li class="ml-4 mb-1">.*?<\/li>\n?)+)/g, '<ul class="list-disc ml-6 mb-3 space-y-1">$1</ul>');
 
     // Numbered lists
     html = html.replace(/^\d+\. (.*$)/gim, '<li class="ml-4 mb-1">$1</li>');
@@ -856,7 +1108,8 @@ const MarkdownContent = ({ content, renderedContent, isMarkdown }) => {
 
             try {
                 const uniqueId = `mermaid-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-                const { svg } = await mermaid.render(uniqueId, mermaidCode);
+                const cleanCode = sanitizeMermaidCode(mermaidCode);
+                const { svg } = await mermaid.render(uniqueId, cleanCode);
 
                 // Replace the container content with the rendered SVG
                 const svgDiv = document.createElement('div');
@@ -1088,7 +1341,7 @@ const EmailViewer = ({ emailData }) => {
         setSendStatus(null);
 
         try {
-            const response = await fetch('http://localhost:5001/api/email/send', {
+            const response = await fetch('/api/email/send', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -1125,50 +1378,13 @@ const EmailViewer = ({ emailData }) => {
     };
 
     const toggleEdit = () => {
-        if (isEditing) {
-            // Saving changes
-            // Convert plain text back to HTML for the body
-            const htmlBody = plainTextBody.split('\n').map(line =>
-                line.trim() ? `<p>${line}</p>` : '<br/>'
-            ).join('');
-
-            setEditedEmail(prev => ({
-                ...prev,
-                body: htmlBody
-            }));
-        }
-        setIsEditing(!isEditing);
+        // Redundant with inline editing, but kept compatibility if called elsewhere
     };
 
-    const emailBody = cleanHTML(editedEmail.body);
-    const hasHTML = /<[a-z][\s\S]*>/i.test(emailBody);
-
-    if (isSent) {
-        return (
-            <div className="w-full max-w-2xl bg-card rounded-xl border border-border shadow-sm p-8 flex flex-col items-center justify-center text-center space-y-4 animate-in zoom-in-95 duration-300">
-                <div className="w-16 h-16 bg-green-500/10 text-green-500 rounded-full flex items-center justify-center mb-2">
-                    <Check size={32} />
-                </div>
-                <h3 className="text-xl font-semibold text-foreground">Email Sent Successfully!</h3>
-                <p className="text-muted-foreground max-w-md">
-                    Your email to <span className="font-medium text-foreground">{editedEmail.to}</span> has been sent.
-                </p>
-                <div className="flex gap-3 mt-4">
-                    <button
-                        onClick={() => setIsSent(false)}
-                        className="px-4 py-2 bg-secondary hover:bg-secondary/80 text-secondary-foreground rounded-lg transition-colors text-sm font-medium"
-                    >
-                        Send Another
-                    </button>
-                </div>
-            </div>
-        );
-    }
-
     return (
-        <div className="w-full max-w-2xl bg-card rounded-2xl border border-border shadow-2xl overflow-hidden flex flex-col">
+        <div className="w-full h-full bg-background flex flex-col">
             {/* Header */}
-            <div className="px-6 py-4 border-b border-border/50 flex items-center justify-between bg-card/50 backdrop-blur-sm">
+            <div className="px-6 py-4 border-b border-border/50 flex items-center justify-between bg-card/50 backdrop-blur-sm sticky top-0 z-10">
                 <div className="flex items-center gap-2.5">
                     <div className="p-2 bg-primary/10 rounded-lg text-primary">
                         <Mail size={18} />
@@ -1176,13 +1392,10 @@ const EmailViewer = ({ emailData }) => {
                     <span className="font-semibold text-foreground">Email Draft</span>
                 </div>
                 <div className="flex items-center gap-3">
-                    <button
-                        onClick={toggleEdit}
-                        className={`p-2 rounded-full transition-all duration-200 ${isEditing ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-secondary hover:text-foreground'}`}
-                        title={isEditing ? "View Preview" : "Edit Email"}
-                    >
-                        {isEditing ? <Eye size={18} /> : <Edit2 size={18} />}
-                    </button>
+                    <div className="flex items-center gap-2 text-muted-foreground text-xs mr-2">
+                        <Eye size={14} />
+                        <span>Previewing & Editing</span>
+                    </div>
                     <button
                         onClick={handleSend}
                         disabled={isSending}
@@ -1214,75 +1427,54 @@ const EmailViewer = ({ emailData }) => {
                 </div>
             )}
 
-            {/* Content Form */}
-            <div className="p-6 space-y-6">
-                {isEditing ? (
-                    <div className="space-y-5 animate-in fade-in duration-300">
-                        <div className="space-y-1.5">
-                            <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide ml-1">To</label>
+            {/* Content Form - Always Editable */}
+            <div className="p-6 space-y-6 flex-1 overflow-auto">
+                <div className="space-y-6 animate-in fade-in duration-300 max-w-4xl mx-auto w-full">
+
+                    {/* To Field */}
+                    <div className="group relative">
+                        <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide ml-1 mb-1.5 block">To</label>
+                        <div className="relative">
                             <input
                                 type="email"
                                 value={editedEmail.to}
                                 onChange={(e) => setEditedEmail({ ...editedEmail, to: e.target.value })}
-                                className="w-full px-4 py-2.5 bg-secondary/30 border border-border/50 hover:border-border focus:border-primary/50 focus:bg-secondary/50 rounded-xl text-sm transition-all outline-none"
+                                className="w-full px-4 py-3 bg-secondary/30 border border-border/50 hover:border-border focus:border-primary/50 focus:bg-secondary/50 rounded-xl text-sm transition-all outline-none font-medium text-foreground pr-10"
                                 placeholder="recipient@example.com"
                             />
+                            <Edit2 size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground/50 pointer-events-none group-focus-within:text-primary/70 transition-colors" />
                         </div>
-                        <div className="space-y-1.5">
-                            <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide ml-1">Subject</label>
+                    </div>
+
+                    {/* Subject Field */}
+                    <div className="group relative">
+                        <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide ml-1 mb-1.5 block">Subject</label>
+                        <div className="relative">
                             <input
                                 type="text"
                                 value={editedEmail.subject}
                                 onChange={(e) => setEditedEmail({ ...editedEmail, subject: e.target.value })}
-                                className="w-full px-4 py-2.5 bg-secondary/30 border border-border/50 hover:border-border focus:border-primary/50 focus:bg-secondary/50 rounded-xl text-sm transition-all outline-none font-medium"
+                                className="w-full px-4 py-3 bg-secondary/30 border border-border/50 hover:border-border focus:border-primary/50 focus:bg-secondary/50 rounded-xl text-sm transition-all outline-none font-semibold text-foreground pr-10"
                                 placeholder="Email subject"
                             />
+                            <Edit2 size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground/50 pointer-events-none group-focus-within:text-primary/70 transition-colors" />
                         </div>
-                        <div className="space-y-1.5">
-                            <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide ml-1">Body</label>
+                    </div>
+
+                    {/* Body Field - Acts as plain text editor but looks like preview */}
+                    <div className="group relative">
+                        <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide ml-1 mb-1.5 block">Body</label>
+                        <div className="relative">
                             <textarea
                                 value={plainTextBody}
                                 onChange={(e) => setPlainTextBody(e.target.value)}
-                                className="w-full px-4 py-3 bg-secondary/30 border border-border/50 hover:border-border focus:border-primary/50 focus:bg-secondary/50 rounded-xl text-sm transition-all outline-none min-h-[250px] resize-none leading-relaxed"
+                                className="w-full px-5 py-5 bg-card/60 border border-border/50 hover:border-border focus:border-primary/50 focus:bg-card/80 rounded-xl text-sm transition-all outline-none min-h-[400px] resize-none leading-relaxed shadow-sm font-sans"
                                 placeholder="Write your email content here..."
                             />
+                            <Edit2 size={14} className="absolute right-4 top-4 text-muted-foreground/50 pointer-events-none group-focus-within:text-primary/70 transition-colors" />
                         </div>
                     </div>
-                ) : (
-                    <div className="space-y-6 animate-in fade-in duration-300">
-                        {/* To Field */}
-                        <div className="border-b border-border/40 pb-4">
-                            <div className="text-xs text-muted-foreground mb-1">To:</div>
-                            <div className="text-base font-medium text-foreground tracking-tight">{editedEmail.to || 'Not specified'}</div>
-                        </div>
-
-                        {/* Subject Field */}
-                        <div className="border-b border-border/40 pb-4">
-                            <div className="text-xs text-muted-foreground mb-1">Subject:</div>
-                            <div className="text-lg font-semibold text-foreground tracking-tight">{editedEmail.subject || 'No Subject'}</div>
-                        </div>
-
-                        {/* Preview Area */}
-                        <div className="space-y-2">
-                            <div className="text-xs text-muted-foreground">Preview:</div>
-                            <div className="bg-white text-zinc-900 rounded-xl p-6 shadow-sm border border-zinc-200/60 min-h-[200px] max-h-[400px] overflow-auto">
-                                {hasHTML ? (
-                                    <div
-                                        dangerouslySetInnerHTML={{ __html: emailBody }}
-                                        className="prose prose-sm max-w-none text-zinc-800"
-                                        style={{
-                                            fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif',
-                                        }}
-                                    />
-                                ) : (
-                                    <div className="whitespace-pre-wrap text-zinc-800 leading-relaxed font-sans">
-                                        {emailBody || <span className="text-zinc-400 italic">No content</span>}
-                                    </div>
-                                )}
-                            </div>
-                        </div>
-                    </div>
-                )}
+                </div>
             </div>
         </div>
     );
@@ -1346,12 +1538,73 @@ const generateFilename = (taskText, agentType, defaultName) => {
     }
 
     // Add appropriate extension based on agent type
-    const extension = agentType === 'research' || agentType === 'document' || agentType === 'case_study' ? 'md' : 'txt';
+    let extension = 'txt';
+    if (agentType === 'research' || agentType === 'document' || agentType === 'case_study') {
+        extension = 'md';
+    } else if (agentType === 'flowchart') {
+        extension = 'mermaid';
+    }
     return `${filename}.${extension}`;
 };
 
 const TaskTimeline = ({ tasks, results, isProcessing, onModalToggle, setResultDrawerState, setResultDrawerOpen }) => {
     const [completedTasks, setCompletedTasks] = useState(new Set());
+
+    // Track sending status by result ID or index to allow parallel sending
+    const [sendingEmails, setSendingEmails] = useState({}); // { [index]: { status: 'idle'|'sending'|'success'|'error', message: '' } }
+
+    const handleDirectEmailSend = async (index, result) => {
+        if (!result.to || !result.subject || !result.body) {
+            setSendingEmails(prev => ({
+                ...prev,
+                [index]: { status: 'error', message: 'Missing fields' }
+            }));
+            return;
+        }
+
+        setSendingEmails(prev => ({
+            ...prev,
+            [index]: { status: 'sending', message: 'Sending...' }
+        }));
+
+        try {
+            const response = await fetch('/api/email/send', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    to: result.to,
+                    subject: result.subject,
+                    body: result.body
+                }),
+            });
+            const data = await response.json();
+
+            if (response.ok && data.success) {
+                setSendingEmails(prev => ({
+                    ...prev,
+                    [index]: { status: 'success', message: 'Sent!' }
+                }));
+                // Reset success message after 3 seconds
+                setTimeout(() => {
+                    setSendingEmails(prev => {
+                        const newState = { ...prev };
+                        delete newState[index];
+                        return newState;
+                    });
+                }, 3000);
+            } else {
+                setSendingEmails(prev => ({
+                    ...prev,
+                    [index]: { status: 'error', message: 'Failed' }
+                }));
+            }
+        } catch (error) {
+            setSendingEmails(prev => ({
+                ...prev,
+                [index]: { status: 'error', message: 'Error' }
+            }));
+        }
+    };
     const [processingTasks, setProcessingTasks] = useState(new Set());
     const mermaidInitialized = useRef(false);
 
@@ -1363,7 +1616,12 @@ const TaskTimeline = ({ tasks, results, isProcessing, onModalToggle, setResultDr
             console.error = (...args) => {
                 // Filter out Mermaid syntax error messages
                 const message = args.join(' ');
-                if (message.includes('Syntax error') && message.includes('mermaid')) {
+                if (
+                    (message.includes('Syntax error') && message.includes('mermaid')) ||
+                    message.includes('Parse error on line') ||
+                    message.includes('Error executing queue') ||
+                    message.includes("Expecting 'SQE'")
+                ) {
                     return; // Suppress Mermaid syntax errors
                 }
                 originalLogError.apply(console, args);
@@ -1388,8 +1646,8 @@ const TaskTimeline = ({ tasks, results, isProcessing, onModalToggle, setResultDr
 
     useEffect(() => {
         if (isProcessing && tasks.length > 0 && processingTasks.size === 0 && completedTasks.size === 0) {
-            // Start the first task
-            setProcessingTasks(new Set([0]));
+            // Start ALL tasks immediately for parallel processing
+            setProcessingTasks(new Set(tasks.map((_, i) => i)));
         }
     }, [tasks, isProcessing]);
 
@@ -1405,11 +1663,13 @@ const TaskTimeline = ({ tasks, results, isProcessing, onModalToggle, setResultDr
         }
 
         if (results && Object.keys(results).length > 0) {
-            // Check the currently processing task
-            const currentTaskIndex = Array.from(processingTasks)[0];
+            // Check ALL processing tasks, not just one
+            const processingArray = Array.from(processingTasks);
 
-            if (currentTaskIndex !== undefined && currentTaskIndex < tasks.length) {
-                const task = tasks[currentTaskIndex];
+            processingArray.forEach(taskIndex => {
+                if (taskIndex >= tasks.length) return;
+
+                const task = tasks[taskIndex];
                 const agentName = task.agent === 'flowchart' ? 'Flowchart Agent' :
                     task.agent === 'email' ? 'Email Agent' :
                         task.agent === 'research' ? 'Research Agent' :
@@ -1426,75 +1686,77 @@ const TaskTimeline = ({ tasks, results, isProcessing, onModalToggle, setResultDr
                                                                     task.agent === 'whatsapp' ? 'WhatsApp Agent' :
                                                                         task.agent === 'presentation' ? 'Presentation Agent' : 'AI Agent';
 
-                const resultKey = agentName;
-                const result = results[resultKey];
+                // Try to get result by task index first (most specific), fall back to agent name
+                const taskResultKey = `task_${taskIndex}`;
+                const agentResultKey = agentName;
+                const result = results[taskResultKey] || results[agentResultKey];
 
-                const hasCapturedResult = capturedResults[currentTaskIndex];
+                const hasCapturedResult = capturedResults[taskIndex];
 
-                // If we get a result for the active task, capture it and advance
+                // If we get a result for this task, capture it
                 if (result && !result.error && !hasCapturedResult) {
-
-                    // STALE DATA CHECK:
-                    // Ensure this result isn't just a leftover from a previous task with the same agent.
+                    // For parallel execution with task indices, we don't need staleness check
+                    // Each task has its own index, so results won't collide
+                    const usingTaskIndex = !!results[taskResultKey];
                     let isStale = false;
-                    for (let i = currentTaskIndex - 1; i >= 0; i--) {
-                        if (tasks[i].agent === task.agent) {
-                            const prevResult = capturedResults[i];
-                            // If the previous result content is identical to the current "new" result, 
-                            // assume the backend hasn't updated the stream for this agent yet.
-                            if (prevResult && JSON.stringify(prevResult) === JSON.stringify(result)) {
-                                isStale = true;
+
+                    // Only check for staleness if we're using agent name (backward compatibility)
+                    if (!usingTaskIndex) {
+                        for (let i = taskIndex - 1; i >= 0; i--) {
+                            if (tasks[i].agent === task.agent && completedTasks.has(i)) {
+                                const prevResult = capturedResults[i];
+                                if (prevResult && JSON.stringify(prevResult) === JSON.stringify(result)) {
+                                    isStale = true;
+                                }
+                                break;
                             }
-                            break; // Found the most recent task of same type
                         }
                     }
 
                     if (!isStale) {
-                        // Capture the result to prevent overwriting by future tasks with same agent
-                        // IMPORTANT: Create a copy {...result} so we don't store a mutable reference
-                        // that the parent component might update later.
-                        setCapturedResults(prev => ({
-                            ...prev,
-                            [currentTaskIndex]: { ...result }
-                        }));
+                        // For image and plotting agents, wait until image_url/chart_url is available
+                        const isImageAgent = task.agent === 'image';
+                        const isPlottingAgent = task.agent === 'plotting';
+                        const hasImageUrl = result.image_url && result.image_url.length > 0;
+                        const hasChartUrl = result.chart_url && result.chart_url.length > 0;
 
-                        // Mark current task as complete and next as processing
-                        setTimeout(() => {
-                            setCompletedTasks(prev => new Set([...prev, currentTaskIndex]));
-                            setProcessingTasks(prev => {
-                                const newSet = new Set(prev);
-                                newSet.delete(currentTaskIndex);
-                                if (currentTaskIndex + 1 < tasks.length) {
-                                    newSet.add(currentTaskIndex + 1);
-                                }
-                                return newSet;
-                            });
+                        // Only mark complete if:
+                        // - Not an image/plotting agent, OR
+                        // - Is an image agent AND has image_url, OR
+                        // - Is a plotting agent AND has chart_url
+                        const canComplete = (!isImageAgent && !isPlottingAgent) ||
+                            (isImageAgent && hasImageUrl) ||
+                            (isPlottingAgent && hasChartUrl);
 
-                            // Auto-expand logic removed
-                            {/* logic removed */ }
-                        }, 400);
+                        if (canComplete) {
+                            // Capture the result
+                            setCapturedResults(prev => ({
+                                ...prev,
+                                [taskIndex]: { ...result }
+                            }));
+
+                            // Mark task as complete
+                            setTimeout(() => {
+                                setCompletedTasks(prev => new Set([...prev, taskIndex]));
+                                setProcessingTasks(prev => {
+                                    const newSet = new Set(prev);
+                                    newSet.delete(taskIndex);
+                                    return newSet;
+                                });
+                            }, 300);
+                        }
                     }
                 }
-            } else if (processingTasks.size === 0 && completedTasks.size < tasks.length && completedTasks.size > 0) {
-                // Recovery: If we are stuck (no processing task, but not all done), try to restart next pending
-                const nextIndex = Math.max(...Array.from(completedTasks)) + 1;
-                if (nextIndex < tasks.length) {
-                    setProcessingTasks(new Set([nextIndex]));
-                }
-            }
+            });
         }
-    }, [results, tasks, processingTasks, isProcessing, completedTasks]);
+    }, [results, tasks, processingTasks, isProcessing, completedTasks, capturedResults]);
 
 
     return (
         <div className="flex flex-col gap-0">
             {tasks.map((task, index) => {
-                // Progressive Disclosure:
-                // Show task if it is the first task OR if the previous task is completed.
-                // This creates the effect of tasks appearing one by one.
-                const shouldShow = index === 0 || completedTasks.has(index - 1);
-
-                if (!shouldShow) return null;
+                // Show all tasks immediately for parallel visualization
+                const shouldShow = true;
 
                 const isCompleted = completedTasks.has(index);
                 const isProcessing = processingTasks.has(index) && !isCompleted;
@@ -1516,11 +1778,10 @@ const TaskTimeline = ({ tasks, results, isProcessing, onModalToggle, setResultDr
                                                                         task.agent === 'presentation' ? 'Presentation Agent' : 'AI Agent';
 
                 // Find result for this agent
-                // Use captured result if available (preserved from overwrites), otherwise lookup in current results
-                // Note: The API returns results keyed by "Agent Name" (e.g. "Email Agent"), 
-                // but tasks have "agent": "email". We need to match them.
-                const resultKey = agentName;
-                const result = capturedResults[index] || (results && results[resultKey]);
+                // ALWAYS use task index for lookup to prevent duplicate results when multiple tasks use same agent
+                const taskResultKey = `task_${index}`;
+                const result = results?.[taskResultKey] || capturedResults[index];
+                console.log(`[DEBUG] Rendering task ${index} (${task.agent}), result:`, result);
 
                 return (
                     <motion.div
@@ -1564,6 +1825,14 @@ const TaskTimeline = ({ tasks, results, isProcessing, onModalToggle, setResultDr
                             {/* Skeleton Loading for Processing */}
                             {isProcessing && !isCompleted && (
                                 <div className="mt-2">
+                                    {task.agent === 'image' && (
+                                        <div className="mb-2">
+                                            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                                                <div className="w-1 h-1 bg-primary rounded-full animate-pulse"></div>
+                                                <span>{result ? 'Uploading to cloud storage...' : 'Generating image...'}</span>
+                                            </div>
+                                        </div>
+                                    )}
                                     {(task.agent === 'flowchart' || task.agent === 'image' || task.agent === 'plotting') && (
                                         <div className="p-3 bg-secondary/50 rounded-lg border border-border/50">
                                             {task.agent === 'flowchart' ? (
@@ -1592,57 +1861,43 @@ const TaskTimeline = ({ tasks, results, isProcessing, onModalToggle, setResultDr
                                                     onClick={() => {
                                                         setResultDrawerState({
                                                             type: 'image',
-                                                            content: `http://localhost:5001${imageUrl}`,
+                                                            content: `http://20.197.35.140:5001${imageUrl}`,
                                                             title: `${result.title || 'Chart'} - ${result.chart_types?.[imgIndex] || 'Chart'} ${imgIndex + 1}`
                                                         });
                                                         setResultDrawerOpen(true);
                                                     }}
                                                     onDownload={() => {
-                                                        const url = `http://localhost:5001${imageUrl}`;
+                                                        const url = `http://20.197.35.140:5001${imageUrl}`;
                                                         const filename = imageUrl.split('/').pop() || `chart_${imgIndex + 1}.png`;
                                                         downloadFile(url, filename);
                                                     }}
                                                 />
                                             ))
                                         ) : result.flowchart ? (
-                                            <div className="w-full">
-                                                <button
-                                                    onClick={() => {
-                                                        const filename = generateFilename(task.task, 'flowchart', 'flowchart.mermaid');
-                                                        setResultDrawerState({ content: result.flowchart, title: filename, type: 'flowchart' });
-                                                        setResultDrawerOpen(true);
-                                                    }}
-                                                    className="w-full flex items-center justify-between p-3.5 pr-5 bg-secondary/30 hover:bg-secondary/50 rounded-xl border border-border/50 transition-all group text-left shadow-sm"
-                                                >
-                                                    <div className="flex items-center gap-2.5 overflow-hidden">
-                                                        <div className="p-2.5 bg-background rounded-lg text-primary border border-border/50 shadow-sm transition-transform group-hover:scale-105">
-                                                            <FileText size={20} />
-                                                        </div>
-                                                        <div className="min-w-0 flex flex-col gap-0.5">
-                                                            <div className="text-sm font-semibold text-foreground line-clamp-1" title={generateFilename(task.task, 'flowchart', 'flowchart.mermaid').replace(/(\.mermaid|\.txt)$/i, '').replace(/_/g, ' ')}>
-                                                                {generateFilename(task.task, 'flowchart', 'flowchart.mermaid').replace(/(\.mermaid|\.txt)$/i, '').replace(/_/g, ' ')}
-                                                            </div>
-                                                            <div className="text-[10px] text-primary px-1 py-0.5 rounded-[16px] w-fit font-bold uppercase tracking-widest">
-                                                                MERMAID
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                </button>
-                                            </div>
+
+                                            <FlowchartRenderer
+                                                flowchart={result.flowchart}
+                                                index={index}
+                                                mermaidInitialized={mermaidInitialized}
+                                                onClick={() => {
+                                                    setResultDrawerState({ content: result.flowchart, title: 'Flowchart Diagram', type: 'flowchart' });
+                                                    setResultDrawerOpen(true);
+                                                }}
+                                            />
                                         ) : (result.image_url && !result.chart_html && !result.chart_url) ? (
-                                            <div className="w-full">
+                                            <div className="w-full relative group">
                                                 <button
                                                     onClick={() => {
                                                         const imgUrl = result.image_url.startsWith('http') ? result.image_url : `http://localhost:5001${result.image_url}`;
                                                         setResultDrawerState({ content: imgUrl, title: result.topic || 'Generated Image', type: 'image' });
                                                         setResultDrawerOpen(true);
                                                     }}
-                                                    className="w-full flex flex-col group relative isolate"
+                                                    className="w-full flex flex-col relative isolate"
                                                 >
                                                     <div className="relative w-full h-40 rounded-xl overflow-hidden border border-border/50 shadow-sm z-10 bg-muted/20">
                                                         <div className="absolute inset-0 bg-muted/20" />
                                                         <img
-                                                            src={result.image_url.startsWith('http') ? result.image_url : `http://localhost:5001${result.image_url}`}
+                                                            src={result.image_url.startsWith('http') ? result.image_url : `http://20.197.35.140:5001${result.image_url}`}
                                                             alt="Preview"
                                                             className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
                                                             loading="lazy"
@@ -1660,26 +1915,81 @@ const TaskTimeline = ({ tasks, results, isProcessing, onModalToggle, setResultDr
                                                         </div>
                                                     </div>
                                                 </button>
+
+                                                {/* Direct Download Button */}
+                                                <button
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        const imgUrl = result.image_url.startsWith('http') ? result.image_url : `http://20.197.35.140:5001${result.image_url}`;
+                                                        const filename = result.image_url.split('/').pop() || 'image.png';
+                                                        downloadFile(imgUrl, filename);
+                                                    }}
+                                                    className="absolute top-2 right-2 z-20 p-2 bg-black/50 hover:bg-black/70 text-white rounded-full backdrop-blur-sm transition-all opacity-0 group-hover:opacity-100"
+                                                    title="Download Image"
+                                                >
+                                                    <Download size={16} />
+                                                </button>
                                             </div>
                                         ) : (result.chart_html || result.chart_url) ? (
-                                            <MediaBox
-                                                type='chart'
-                                                onClick={() => {
-                                                    setResultDrawerState({
-                                                        type: result.chart_html ? 'html' : 'image',
-                                                        content: result.chart_html || `http://localhost:5001${result.chart_url}`,
-                                                        title: result.title || 'Chart'
-                                                    });
-                                                    setResultDrawerOpen(true);
-                                                }}
-                                                onDownload={() => {
-                                                    if (result.chart_url) {
-                                                        const url = `http://localhost:5001${result.chart_url}`;
-                                                        const filename = result.chart_url.split('/').pop() || 'chart.png';
-                                                        downloadFile(url, filename);
-                                                    }
-                                                }}
-                                            />
+                                            <div className="w-full relative group">
+                                                <button
+                                                    onClick={() => {
+                                                        const chartUrl = result.chart_url?.startsWith('http') ? result.chart_url : `http://20.197.35.140:5001${result.chart_url}`;
+                                                        setResultDrawerState({
+                                                            type: result.chart_html ? 'html' : 'image',
+                                                            content: result.chart_html || chartUrl,
+                                                            title: result.title || 'Chart'
+                                                        });
+                                                        setResultDrawerOpen(true);
+                                                    }}
+                                                    className="w-full flex flex-col relative isolate"
+                                                >
+                                                    <div className="relative w-full h-40 rounded-xl overflow-hidden border border-border/50 shadow-sm z-10 bg-muted/20">
+                                                        <div className="absolute inset-0 bg-muted/20" />
+                                                        {result.chart_html ? (
+                                                            <div
+                                                                dangerouslySetInnerHTML={{ __html: result.chart_html }}
+                                                                className="w-full h-full"
+                                                                style={{ pointerEvents: 'none' }}
+                                                            />
+                                                        ) : (
+                                                            <img
+                                                                src={result.chart_url?.startsWith('http') ? result.chart_url : `http://20.197.35.140:5001${result.chart_url}`}
+                                                                alt="Chart Preview"
+                                                                className="w-full h-full object-contain transition-transform duration-500 group-hover:scale-105 p-2"
+                                                                loading="lazy"
+                                                            />
+                                                        )}
+                                                    </div>
+
+                                                    <div className="relative -mt-3 w-[95%] mx-auto p-3 pt-5 bg-secondary/95 backdrop-blur-sm rounded-b-xl border-x border-b border-border/50 shadow-sm z-0 transform group-hover:translate-y-2 transition-transform duration-300 ease-out text-left">
+                                                        <div className="flex flex-col gap-1 min-w-0">
+                                                            <div className="text-sm font-medium text-foreground line-clamp-1">
+                                                                {result.title || 'Chart'}
+                                                            </div>
+                                                            <div className="text-[10px] bg-blue-500/10 text-blue-600 px-1.5 py-0.5 rounded w-fit font-semibold uppercase tracking-wider">
+                                                                {result.chart_type?.toUpperCase() || 'CHART'}
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </button>
+
+                                                {/* Direct Download Button */}
+                                                <button
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        if (result.chart_url) {
+                                                            const chartUrl = result.chart_url.startsWith('http') ? result.chart_url : `http://20.197.35.140:5001${result.chart_url}`;
+                                                            const filename = result.chart_url.split('/').pop() || 'chart.png';
+                                                            downloadFile(chartUrl, filename);
+                                                        }
+                                                    }}
+                                                    className="absolute top-2 right-2 z-20 p-2 bg-black/50 hover:bg-black/70 text-white rounded-full backdrop-blur-sm transition-all opacity-0 group-hover:opacity-100"
+                                                    title="Download Chart"
+                                                >
+                                                    <Download size={16} />
+                                                </button>
+                                            </div>
                                         ) : task.agent === 'presentation' && result.pptx_url ? (
                                             // Presentation Download Card
                                             <div className="w-full p-4 bg-gradient-to-r from-blue-500/10 to-purple-500/10 rounded-lg border border-blue-500/20">
@@ -1698,7 +2008,7 @@ const TaskTimeline = ({ tasks, results, isProcessing, onModalToggle, setResultDr
                                                 </div>
                                                 <button
                                                     onClick={() => {
-                                                        const url = `http://localhost:5001${result.pptx_url}`;
+                                                        const url = `http://20.197.35.140:5001${result.pptx_url}`;
                                                         const filename = result.filename || result.pptx_url.split('/').pop() || 'presentation.pptx';
                                                         downloadFile(url, filename);
                                                     }}
@@ -1723,7 +2033,6 @@ const TaskTimeline = ({ tasks, results, isProcessing, onModalToggle, setResultDr
                                                     <div className="flex-1 min-w-0 flex flex-col gap-1">
                                                         <div className="flex items-center justify-between gap-2">
                                                             <h4 className="font-medium text-sm text-foreground">Email Draft</h4>
-                                                            <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-orange-500/10 text-orange-600 uppercase tracking-wider">Ready</span>
                                                         </div>
                                                         <p className="text-xs text-muted-foreground line-clamp-1">
                                                             {result.subject || 'No Subject'}
@@ -1733,21 +2042,55 @@ const TaskTimeline = ({ tasks, results, isProcessing, onModalToggle, setResultDr
                                                         </p>
                                                     </div>
                                                 </div>
-                                                <button
-                                                    onClick={() => setResultDrawerState({
-                                                        content: {
-                                                            to: result.to || '',
-                                                            subject: result.subject || 'Untitled',
-                                                            body: result.body || ''
-                                                        },
-                                                        title: 'Email Draft',
-                                                        type: 'email'
-                                                    }, setResultDrawerOpen(true))}
-                                                    className="w-full py-2.5 bg-background border border-border hover:bg-secondary hover:border-secondary-foreground/20 text-foreground rounded-lg text-xs font-medium transition-all flex items-center justify-center gap-2 group-hover:shadow-sm"
-                                                >
-                                                    Review & Send
-                                                    <ArrowUp className="rotate-45 text-muted-foreground group-hover:text-primary transition-colors" size={14} />
-                                                </button>
+                                                <div className="flex gap-2 mt-1">
+                                                    <button
+                                                        onClick={() => setResultDrawerState({
+                                                            content: {
+                                                                to: result.to || '',
+                                                                subject: result.subject || 'Untitled',
+                                                                body: result.body || ''
+                                                            },
+                                                            title: 'Email Draft',
+                                                            type: 'email'
+                                                        }, setResultDrawerOpen(true))}
+                                                        className="flex-1 py-2 bg-background border border-border hover:bg-secondary hover:border-secondary-foreground/20 text-foreground rounded-lg text-xs font-medium transition-all flex items-center justify-center gap-1.5 shadow-sm"
+                                                    >
+                                                        <Eye size={13} className="text-muted-foreground" />
+                                                        Review
+                                                    </button>
+                                                    <button
+                                                        onClick={() => handleDirectEmailSend(index, result)}
+                                                        disabled={sendingEmails[index]?.status === 'sending' || sendingEmails[index]?.status === 'success'}
+                                                        className={`flex-1 py-2 rounded-lg text-xs font-medium transition-all flex items-center justify-center gap-1.5 shadow-sm border ${sendingEmails[index]?.status === 'success'
+                                                            ? 'bg-green-600 text-white border-green-600'
+                                                            : sendingEmails[index]?.status === 'error'
+                                                                ? 'bg-red-600 text-white border-red-600'
+                                                                : 'bg-primary hover:bg-primary/90 text-primary-foreground border-primary'
+                                                            }`}
+                                                    >
+                                                        {sendingEmails[index]?.status === 'sending' ? (
+                                                            <>
+                                                                <Loader2 size={13} className="animate-spin" />
+                                                                Sending...
+                                                            </>
+                                                        ) : sendingEmails[index]?.status === 'success' ? (
+                                                            <>
+                                                                <Check size={13} />
+                                                                Sent!
+                                                            </>
+                                                        ) : sendingEmails[index]?.status === 'error' ? (
+                                                            <>
+                                                                <AlertCircle size={13} />
+                                                                Error
+                                                            </>
+                                                        ) : (
+                                                            <>
+                                                                <Send size={13} />
+                                                                Send directly
+                                                            </>
+                                                        )}
+                                                    </button>
+                                                </div>
                                             </div>
                                         ) : (result.result || result.ideas || result.content || result.summary || result.document || result.message) ? (
                                             // Handle Text/File Results
@@ -1896,8 +2239,14 @@ const TaskTimeline = ({ tasks, results, isProcessing, onModalToggle, setResultDr
 
 
 
-const FastMode = ({ navigateOnly, user, messages, setMessages, onAuthClick }) => {
+const FastMode = ({ navigateOnly, user, messages, setMessages, onAuthClick, onChatReset }) => {
     // messages state is now lifted to App.jsx
+
+    const WELCOME_MESSAGE = [{
+        id: Date.now(),
+        role: 'ai',
+        content: "Hi there! I'm Bianca, a friendly AI assistant from Tools That Make Life Too Easy. I can help you with a variety of tasks using my specialized agents."
+    }];
 
     const [showClearConfirm, setShowClearConfirm] = useState(false); // State for custom clear confirmation
 
@@ -1944,6 +2293,71 @@ const FastMode = ({ navigateOnly, user, messages, setMessages, onAuthClick }) =>
     };
     const [inputValue, setInputValue] = useState("");
     const [isLoading, setIsLoading] = useState(false);
+    // 1. Available Quick Actions/Categories for "Chips"
+    const [availableCategories, setAvailableCategories] = useState([]);
+
+    // Fetch available categories for "For You" dropdown
+    useEffect(() => {
+        const fetchCategories = async () => {
+            if (!user) {
+                setAvailableCategories([]);
+                return;
+            }
+
+            try {
+                // 1. Fetch Products for Likes and Trending
+                const { data: productsData } = await supabase
+                    .from('products')
+                    .select('id, title, description, views, liked_by');
+
+                // 2. Fetch User Details for Bookmarks and Logs
+                const { data: userData } = await supabase
+                    .from('user_details')
+                    .select('bookmarks, logs')
+                    .eq('id', user.id)
+                    .single();
+
+                const categories = [];
+
+                if (productsData && productsData.length > 0) {
+                    // Trending: Always has items if products exist
+                    categories.push('Trending');
+
+                    // Liked: Check if any product is liked by user
+                    const hasLiked = productsData.some(p => p.liked_by && p.liked_by.includes(user.id));
+                    if (hasLiked) categories.push('Liked');
+                }
+
+                if (userData) {
+                    // Bookmarked: Check if bookmarks array is not empty
+                    if (userData.bookmarks && userData.bookmarks.length > 0) {
+                        categories.push('Bookmarked');
+                    }
+
+                    // Recently Used: Check logs (simplified matching check)
+                    if (userData.logs && userData.logs.length > 0) {
+                        // We use a simplified check here: if logs exist, we likely have recent items.
+                        // To be strictly consistent with Manual.jsx, we should match them, 
+                        // but for dropdown visibility, this might be sufficient and faster.
+                        // Let's do a quick match to be safe.
+                        const hasRecent = userData.logs.some(log =>
+                            productsData.some(p =>
+                                p.title && (log.description?.includes(p.title) || p.title.includes(log.description))
+                            )
+                        );
+                        if (hasRecent) categories.push('Recently Used');
+                    }
+                }
+
+                setAvailableCategories(categories);
+            } catch (err) {
+                console.error("Error fetching available categories:", err);
+            }
+        };
+
+        fetchCategories();
+    }, [user]);
+
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [selectedFile, setSelectedFile] = useState(null);
     const [showFileOptions, setShowFileOptions] = useState(false);
@@ -1959,10 +2373,19 @@ const FastMode = ({ navigateOnly, user, messages, setMessages, onAuthClick }) =>
 
     // Effect 1: Handle Chat Reset on Auth Change
     useEffect(() => {
+        // Skip initial hydration check where user goes from undefined -> object
+        if (prevUserIdRef.current === undefined && user?.id) {
+            prevUserIdRef.current = user.id;
+            return;
+        }
+
         const currentUserId = user?.id;
-        // Check if ID changed (e.g., undefined -> uuid (login), uuid -> undefined (logout), uuidA -> uuidB (switch))
+        // Check if ID changed (e.g., login, logout, switch)
         if (prevUserIdRef.current !== currentUserId) {
-            setMessages([]); // Clear chat session
+            // Only reset if it's an actual change, not just initial load
+            if (prevUserIdRef.current !== undefined || currentUserId === undefined) {
+                setMessages(WELCOME_MESSAGE); // Reset to welcome message
+            }
             prevUserIdRef.current = currentUserId; // Update ref
         }
     }, [user?.id, setMessages]);
@@ -1975,7 +2398,7 @@ const FastMode = ({ navigateOnly, user, messages, setMessages, onAuthClick }) =>
         }
 
         const fetchCredits = async () => {
-            const { data } = await supabase.from('user_details').select('credits').eq('id', user.id).single();
+            const { data } = await supabase.from('user_details').select('credits').eq('id', user.id).maybeSingle();
             if (data) setCredits(data.credits);
         };
 
@@ -2002,6 +2425,15 @@ const FastMode = ({ navigateOnly, user, messages, setMessages, onAuthClick }) =>
 
     const fileInputRef = useRef(null);
     const messagesEndRef = useRef(null);
+    const inputRef = useRef(null);
+
+    // Auto-focus input on mount
+    useEffect(() => {
+        const timer = setTimeout(() => {
+            inputRef.current?.focus();
+        }, 100);
+        return () => clearTimeout(timer);
+    }, []);
 
     const scrollToBottom = () => {
         const scrollContainer = document.querySelector('.main-body > .content-area');
@@ -2062,7 +2494,7 @@ const FastMode = ({ navigateOnly, user, messages, setMessages, onAuthClick }) =>
             const initialMsg = {
                 id: 'welcome-msg',
                 role: 'ai',
-                content: "Hi there! I'm Bianca, a friendly AI assistant from Alien X Corp, built by Abhi. I can help you with a variety of tasks using my specialized agents."
+                content: "Hi there! I'm Bianca, a friendly AI assistant from Tools That Make Life Too Easy. I can help you with a variety of tasks using my specialized agents."
             };
             setMessages([initialMsg]);
         }
@@ -2125,7 +2557,7 @@ const FastMode = ({ navigateOnly, user, messages, setMessages, onAuthClick }) =>
             formData.append('focus', summaryFocus);
             formData.append('max_length', summaryLength);
 
-            const response = await fetch('http://localhost:5001/api/summary/upload', {
+            const response = await fetch('/api/summary/upload', {
                 method: 'POST',
                 body: formData
             });
@@ -2205,18 +2637,42 @@ const FastMode = ({ navigateOnly, user, messages, setMessages, onAuthClick }) =>
             return;
         }
 
-        // REMOVED: Initial strict credit check. We now check lazily when we know the agent type.
-        // REMOVED: Optimistic deduction.
+        // Check Credits - Block if 0
+        const { data: latestUserCheck } = await supabase.from('user_details').select('credits').eq('id', user.id).maybeSingle();
+        if (latestUserCheck && latestUserCheck.credits <= 0) {
+            setIsLoading("thinking");
+            setTimeout(() => {
+                setIsLoading(false);
+                const noCreditsMsg = {
+                    id: Date.now() + 1,
+                    role: 'ai',
+                    content: "You need at least 1 credit to use this feature. \n\nYou can get more credits from the **Shop** page (accessible via the sidebar) for just **₹2/credit** or **₹19 per 10 credits**, or upgrade to a **Common** or **Wealthy** role to unlock more capabilities.",
+                };
+                setMessages(prev => [...prev, noCreditsMsg]);
+            }, 600);
+            return;
+        }
 
         // Shared state for this execution
         let creditsDeducted = 0;
 
         // Helper to update credits in DB
         const updateUserCredits = async (changeAmount) => {
-            const { data: latestUser } = await supabase.from('user_details').select('credits').eq('id', user.id).single();
+            const { data: latestUser } = await supabase.from('user_details').select('credits').eq('id', user.id).maybeSingle();
             if (latestUser) {
                 const newCredits = Math.max(0, latestUser.credits + changeAmount);
                 await supabase.from('user_details').update({ credits: newCredits }).eq('id', user.id);
+
+                // Log transaction
+                if (changeAmount !== 0) {
+                    await logTransaction(
+                        user.id,
+                        Math.abs(changeAmount),
+                        changeAmount > 0 ? 'credit' : 'debit',
+                        changeAmount > 0 ? 'Credit adjustment' : 'Fast Mode Agent Usage',
+                        newCredits
+                    );
+                }
 
                 // Update local user object strictly for UI reflection if needed, 
                 // though usually the auth listener handles this.
@@ -2228,10 +2684,23 @@ const FastMode = ({ navigateOnly, user, messages, setMessages, onAuthClick }) =>
 
 
 
+        // Timeout handling
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => {
+            controller.abort();
+            setIsLoading(false);
+            const timeoutMsg = {
+                id: Date.now() + 1,
+                role: 'ai',
+                content: "Thinking timed out. The server took too long to respond. Please try again."
+            };
+            setMessages(prev => [...prev, timeoutMsg]);
+        }, 60000); // 60 seconds
+
         setIsLoading("Analyzing your request and routing to appropriate agents...");
 
         try {
-            const response = await fetch('http://localhost:5001/api/process-stream', {
+            const response = await fetch('/api/process-stream', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -2240,6 +2709,7 @@ const FastMode = ({ navigateOnly, user, messages, setMessages, onAuthClick }) =>
                     prompt: userMsg.content,
                     user: user?.user_metadata?.username || user?.email || null
                 }),
+                signal: controller.signal
             });
 
             const reader = response.body.getReader();
@@ -2320,7 +2790,7 @@ const FastMode = ({ navigateOnly, user, messages, setMessages, onAuthClick }) =>
                                 // 2. If Paid Task identified, Check Balance and Deduct Initial Credit
                                 if (isPaidTask) {
                                     // Check current balance real-time
-                                    const { data: latestUser } = await supabase.from('user_details').select('credits').eq('id', user.id).single();
+                                    const { data: latestUser } = await supabase.from('user_details').select('credits').eq('id', user.id).maybeSingle();
                                     const currentCredits = latestUser?.credits || 0;
 
                                     if (currentCredits <= 0) {
@@ -2335,8 +2805,9 @@ const FastMode = ({ navigateOnly, user, messages, setMessages, onAuthClick }) =>
                                     } else {
                                         // Deduct 1 credit upfront for Paid Task
                                         if (creditsDeducted === 0) {
-                                            await updateUserCredits(-1);
-                                            creditsDeducted = 1;
+                                            const deductAmount = 1;
+                                            await updateUserCredits(-deductAmount);
+                                            creditsDeducted = deductAmount;
                                         }
                                     }
                                 }
@@ -2354,8 +2825,30 @@ const FastMode = ({ navigateOnly, user, messages, setMessages, onAuthClick }) =>
                                     }];
                                 });
                             } else if (data.type === 'result') {
-                                // Update results incrementally
-                                resultsData[data.agent] = data.data || { error: data.error };
+                                // Update results incrementally using task index to handle multiple tasks of same agent
+                                const taskIndex = data.index !== undefined ? data.index : tasksData.findIndex(t => {
+                                    const agentNameMap = {
+                                        'Flowchart Agent': 'flowchart',
+                                        'Image Agent': 'image',
+                                        'Research Agent': 'research',
+                                        'Email Agent': 'email',
+                                        'Summary Agent': 'summary',
+                                        'Document Agent': 'document',
+                                        'Case Study Agent': 'case_study',
+                                        'Brainstorm Agent': 'brainstorm',
+                                        'Presentation Agent': 'presentation'
+                                    };
+                                    return agentNameMap[data.agent] === t.agent;
+                                });
+
+                                // Store by both agent name (for backward compatibility) and index
+                                console.log(`[DEBUG] Received result for ${data.agent}, taskIndex: ${taskIndex}`, data.data);
+                                const resultData = data.data || { error: data.error };
+                                resultsData[data.agent] = resultData;
+                                if (taskIndex >= 0) {
+                                    resultsData[`task_${taskIndex}`] = resultData;
+                                    console.log(`[DEBUG] Stored as task_${taskIndex}:`, resultsData[`task_${taskIndex}`]);
+                                }
 
                                 // Handling Completion Cost for Paid Agents
                                 // Handling Completion Cost for Paid Agents
@@ -2484,6 +2977,8 @@ const FastMode = ({ navigateOnly, user, messages, setMessages, onAuthClick }) =>
                 errorMessage = "Insufficient credits. Please top up to use this agent.";
                 // We likely want to show a clear UI state for this.
                 toast.error("Insufficient credits");
+            } else if (error.name === 'AbortError') {
+                return; // Handled by timeout callback
             }
 
             const errorMsg = {
@@ -2493,6 +2988,7 @@ const FastMode = ({ navigateOnly, user, messages, setMessages, onAuthClick }) =>
             };
             setMessages(prev => [...prev, errorMsg]);
         } finally {
+            clearTimeout(timeoutId);
             setIsLoading(false);
         }
     };
@@ -2505,10 +3001,12 @@ const FastMode = ({ navigateOnly, user, messages, setMessages, onAuthClick }) =>
                         activeTab="fastmode"
                         onTabChange={(id) => navigateOnly(id)}
                         user={user}
+                        onSectionSelect={(section) => navigateOnly('home', section)}
+                        availableCategories={availableCategories}
                     />
                 </div>
 
-                <div className="chat-container space-y-6 pt-4 pb-[10vh]">
+                <div className="chat-container space-y-6 pt-4 pb-32 p-4 md:p-0 relative z-0">
                     {messages.map((msg) => (
                         <div key={msg.id} className={`flex items-start gap-4 ${msg.role === 'user' ? 'flex-row-reverse' : ''}`}>
                             {msg.role === 'ai' && (
@@ -2544,11 +3042,25 @@ const FastMode = ({ navigateOnly, user, messages, setMessages, onAuthClick }) =>
                                                     Sign In / Sign Up
                                                 </button>
                                             </div>
-                                        ) : msg.data && msg.data.tasks && msg.data.tasks.length === 1 && msg.data.tasks[0].agent === 'general' && msg.data.results && msg.data.results['Assistant'] ? (
-                                            // For simple greetings/general responses, just show the text
-                                            <div className="whitespace-pre-wrap break-words text-foreground">
-                                                {msg.data.results['Assistant'].response || msg.content}
+                                        ) : msg.requiresReset ? (
+                                            <div className="flex flex-col gap-3">
+                                                <div className="whitespace-pre-wrap text-foreground">
+                                                    {msg.content}
+                                                </div>
+                                                <button
+                                                    onClick={() => onChatReset && onChatReset()}
+                                                    className="flex items-center justify-center gap-2 px-4 py-2 bg-secondary text-foreground rounded-lg hover:bg-muted transition-colors font-medium border border-border w-fit relative z-50 cursor-pointer"
+                                                >
+                                                    <RotateCcw size={16} />
+                                                    Start Fresh
+                                                </button>
                                             </div>
+                                        ) : msg.data && msg.data.tasks && msg.data.tasks.length === 1 && msg.data.tasks[0].agent === 'general' && msg.data.results && msg.data.results['Assistant'] ? (
+                                            // For simple greetings/general responses, just show the text (now parsed as markdown)
+                                            <div
+                                                className="markdown-content text-foreground text-sm prose prose-sm max-w-none prose-headings:font-semibold prose-a:text-blue-500 hover:prose-a:underline prose-p:text-foreground prose-li:text-foreground prose-strong:text-foreground [&>h3]:mt-0 [&>h3]:mb-2"
+                                                dangerouslySetInnerHTML={{ __html: markdownToHtml(msg.data.results['Assistant'].response || msg.content) }}
+                                            />
                                         ) : msg.data && msg.data.tasks ? (
                                             <TaskTimeline
                                                 tasks={msg.data.tasks}
@@ -2560,9 +3072,10 @@ const FastMode = ({ navigateOnly, user, messages, setMessages, onAuthClick }) =>
                                                 setResultDrawerOpen={setResultDrawerOpen}
                                             />
                                         ) : (
-                                            <div className="whitespace-pre-wrap break-words">
-                                                {msg.content}
-                                            </div>
+                                            <div
+                                                className="markdown-content text-foreground text-sm prose prose-sm max-w-none prose-headings:font-semibold prose-a:text-blue-500 hover:prose-a:underline prose-p:text-foreground prose-li:text-foreground prose-strong:text-foreground [&>h3]:mt-0 [&>h3]:mb-2"
+                                                dangerouslySetInnerHTML={{ __html: markdownToHtml(msg.content) }}
+                                            />
                                         )
                                     ) : (
                                         msg.content
@@ -2682,6 +3195,7 @@ const FastMode = ({ navigateOnly, user, messages, setMessages, onAuthClick }) =>
                     {/* Input */}
 
                     <textarea
+                        ref={inputRef}
                         placeholder={showFileOptions ? "File selected. Configure options above or type a message..." : "What can I do for you?"}
                         className="w-full bg-transparent text-xl text-foreground placeholder:text-muted-foreground outline-none pb-8 px-2 resize-none min-h-[60px] max-h-[200px] overflow-y-auto"
                         value={inputValue}
@@ -2707,7 +3221,7 @@ const FastMode = ({ navigateOnly, user, messages, setMessages, onAuthClick }) =>
                     {/* Bottom Controls */}
                     <div className="flex items-center justify-between px-2">
                         <button className="flex items-center gap-2 bg-secondary hover:bg-muted transition-colors rounded-full px-3 py-1.5 text-sm text-secondary-foreground border border-border">
-                            <span className="font-semibold text-foreground">AI</span> Bianca Pro Model
+                            <span className="font-semibold text-foreground">Ax</span> Bianca v1.0
                         </button>
 
                         <div className="flex items-center gap-2">
@@ -2764,10 +3278,9 @@ const FastMode = ({ navigateOnly, user, messages, setMessages, onAuthClick }) =>
                 isOpen={showClearConfirm}
                 onClose={() => setShowClearConfirm(false)}
                 onConfirm={() => {
-                    setMessages([]);
-                    localStorage.removeItem('chat_history');
+                    setMessages(WELCOME_MESSAGE);
+                    // allow App.jsx effect to handle localStorage sync
                     setShowClearConfirm(false);
-                    window.location.reload();
                 }}
                 title="Clear Chat History?"
                 description="This will permanently delete your current conversation history. This action cannot be undone."

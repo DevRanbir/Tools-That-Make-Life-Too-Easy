@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import Lottie from 'lottie-react';
 import animationData from '../assets/loading.json';
 
-const LoadingScreen = ({ darkMode, fadeOut, isGlobal }) => {
+const LoadingScreen = ({ darkMode, fadeOut, isGlobal, transparent, sizeClass }) => {
     const animationDataWithTheme = React.useMemo(() => {
         // Deep clone the animation data to avoid mutating the original source
         const animData = JSON.parse(JSON.stringify(animationData));
@@ -34,9 +34,9 @@ const LoadingScreen = ({ darkMode, fadeOut, isGlobal }) => {
     return (
         <div
             className={`${isGlobal ? 'fixed inset-0 z-[9999]' : 'absolute inset-0 z-50'} flex items-center justify-center transition-opacity duration-700 ease-in-out ${fadeOut ? 'opacity-0' : 'opacity-100'}`}
-            style={{ backgroundColor: darkMode ? '#0a0a0a' : '#f2f5f3' }}
+            style={{ backgroundColor: transparent ? 'transparent' : (darkMode ? '#0a0a0a' : '#f2f5f3') }}
         >
-            <div className="w-64 h-64 md:w-96 md:h-96">
+            <div className={sizeClass || "w-64 h-64 md:w-96 md:h-96"}>
                 <Lottie
                     animationData={animationDataWithTheme}
                     loop={true}

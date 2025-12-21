@@ -554,7 +554,6 @@ input:checked+.slider:before {
 
 .section-header {
   display: flex;
-  flex-direction: column;
   align-items: center;
   margin-bottom: 2rem;
 }
@@ -982,12 +981,12 @@ input:checked+.slider:before {
 
 /* Custom Scrollbar Global Styles */
 ::-webkit-scrollbar {
-  width: 10px;
-  height: 10px;
+  width: 0px;
+  height: 0px;
   scrollbar-width: none;
   scrollbar-color: transparent transparent;
   scrollbar-track-color: transparent;
-
+  scrollbar-thumb-color: transparent;
 
 }
 
@@ -997,7 +996,7 @@ input:checked+.slider:before {
   }
 
   .content-area {
-    padding-left: 5px;
+    padding-left: 0px;
     padding-right: 0px;
   }
 

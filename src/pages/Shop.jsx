@@ -7,6 +7,7 @@ import { useRef, useState, useEffect } from 'react';
 import { gsap } from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
 import { supabase } from '../supabase';
+import { logTransaction } from '../utils/logTransaction';
 import { toast } from 'sonner';
 
 gsap.registerPlugin(ScrollTrigger);
@@ -166,7 +167,7 @@ const ShopPage = ({ navigateOnly, user, sortPreference }) => {
                 .from('user_details')
                 .select('bookmarks, role, credits')
                 .eq('id', user.id)
-                .single();
+                .maybeSingle();
 
             if (data) {
                 // Check for credit limit overflow immediately
@@ -174,7 +175,7 @@ const ShopPage = ({ navigateOnly, user, sortPreference }) => {
                 const userRole = (data.role || 'freebiee').toLowerCase();
                 let roleLimit = 5;
                 if (userRole === 'common') roleLimit = 20;
-                if (userRole === 'wealthy') roleLimit = 50;
+                if (userRole === 'wealthy' || userRole === 'newuser') roleLimit = 50;
                 if (userRole === 'administrator') roleLimit = 100;
 
                 const maxAllowed = roleLimit + 10;
@@ -187,6 +188,15 @@ const ShopPage = ({ navigateOnly, user, sortPreference }) => {
                         .from('user_details')
                         .update({ credits: maxAllowed })
                         .eq('id', user.id);
+
+                    // Log adjustment
+                    await logTransaction(
+                        user.id,
+                        currentCredits - maxAllowed,
+                        'debit',
+                        `Credit limit adjustment (Role: ${userRole})`,
+                        maxAllowed
+                    );
 
                     // Update local state to the limit
                     data.credits = maxAllowed;
@@ -274,7 +284,7 @@ const ShopPage = ({ navigateOnly, user, sortPreference }) => {
 
             let roleLimit = 5; // Freebie default
             if (userRole === 'common') roleLimit = 20;
-            if (userRole === 'wealthy') roleLimit = 50;
+            if (userRole === 'wealthy' || userRole === 'newuser') roleLimit = 50;
             if (userRole === 'administrator') roleLimit = 100;
 
             const maxAllowed = roleLimit + 10;
@@ -291,11 +301,21 @@ const ShopPage = ({ navigateOnly, user, sortPreference }) => {
                 if (error) throw error;
 
                 // Refresh
-                const { data: newData } = await supabase.from('user_details').select('*').eq('id', user.id).single();
-                if (newData) setUserDetails(newData);
+                const { data: newData } = await supabase.from('user_details').select('*').eq('id', user.id).maybeSingle();
+                if (newData) {
+                    setUserDetails(newData);
+                    // Log purchase with new balance
+                    await logTransaction(
+                        user.id,
+                        purchaseAmount,
+                        'credit',
+                        `Purchased ${purchaseAmount} credits`,
+                        newData.credits
+                    );
+                }
 
                 toast.dismiss(loadingToast);
-                toast.success(`Purchased ${purchaseAmount} credits!`);
+                // toast.success handled by logTransaction
             } catch (err) {
                 console.error('Error purchasing credits:', err);
                 toast.dismiss(loadingToast);
@@ -331,12 +351,21 @@ const ShopPage = ({ navigateOnly, user, sortPreference }) => {
 
             if (error) throw error;
 
+            // Log upgrade
+            await logTransaction(
+                user.id,
+                credits,
+                'credit',
+                `Credit reset to ${credits} (Role Upgrade: ${plan.name})`,
+                credits
+            );
+
             // Refresh user details
-            const { data: newData } = await supabase.from('user_details').select('*').eq('id', user.id).single();
+            const { data: newData } = await supabase.from('user_details').select('*').eq('id', user.id).maybeSingle();
             if (newData) setUserDetails(newData);
 
             toast.dismiss(loadingToast);
-            toast.success(`Successfully upgraded to ${plan.name}!`);
+            // toast.success handled by logTransaction
         } catch (error) {
             console.error('Error upgrading role:', error);
             toast.dismiss(loadingToast);

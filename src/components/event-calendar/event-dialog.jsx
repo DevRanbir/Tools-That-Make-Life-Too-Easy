@@ -87,7 +87,7 @@ function DateTimePicker({ date, setDate, time, setTime, label, minDate }) {
             id={id}
             variant={"outline"}
             className={cn(
-              "w-full justify-start text-left font-normal",
+              "w-full justify-start text-left font-normal bg-secondary border-border/50 hover:bg-secondary/80",
               !date && "text-muted-foreground"
             )}
           >
@@ -122,7 +122,7 @@ function DateTimePicker({ date, setDate, time, setTime, label, minDate }) {
                 </Label>
                 <div className="relative grow">
                   <Input
-                    className="peer appearance-none ps-9 [&::-webkit-calendar-picker-indicator]:hidden [&::-webkit-calendar-picker-indicator]:appearance-none"
+                    className="peer appearance-none ps-9 [&::-webkit-calendar-picker-indicator]:hidden [&::-webkit-calendar-picker-indicator]:appearance-none bg-secondary border-border/50"
                     value={time}
                     onChange={handleTimeChange}
                     onBlur={handleTimeBlur}
@@ -344,7 +344,7 @@ export function EventDialog({
 
   return (
     <Dialog onOpenChange={(open) => !open && onClose()} open={isOpen}>
-      <DialogContent className="sm:max-w-[425px]">
+      <DialogContent className="sm:max-w-[600px]">
         <DialogHeader>
           <DialogTitle>{event?.id ? "Edit Event" : "Create Event"}</DialogTitle>
           <DialogDescription className="sr-only">
@@ -362,7 +362,12 @@ export function EventDialog({
         <div className="grid gap-4 py-4">
           <div className="*:not-first:mt-1.5">
             <Label htmlFor="title">Title</Label>
-            <Input id="title" onChange={(e) => setTitle(e.target.value)} value={title} />
+            <Input
+              id="title"
+              onChange={(e) => setTitle(e.target.value)}
+              value={title}
+              className="bg-secondary border-border/50 focus:bg-background transition-colors"
+            />
           </div>
 
           <div className="*:not-first:mt-1.5">
@@ -371,7 +376,9 @@ export function EventDialog({
               id="description"
               onChange={(e) => setDescription(e.target.value)}
               rows={3}
-              value={description} />
+              value={description}
+              className="bg-secondary border-border/50 focus:bg-background transition-colors"
+            />
           </div>
 
           <div className="flex flex-col sm:flex-row gap-4">
@@ -411,11 +418,13 @@ export function EventDialog({
             <Input
               id="location"
               onChange={(e) => setLocation(e.target.value)}
-              value={location} />
+              value={location}
+              className="bg-secondary border-border/50 focus:bg-background transition-colors"
+            />
           </div>
           <fieldset className="space-y-4">
             <legend className="font-medium text-foreground text-sm leading-none">
-              Etiquette
+              Color
             </legend>
             <RadioGroup
               className="flex gap-1.5"

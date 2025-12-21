@@ -10,25 +10,37 @@ const TopBar = ({ darkMode, setDarkMode, onAuthClick, user, navigateOnly, sortPr
     const hiddenPages = ['fastmode', 'todos', 'calendar', 'shop', 'data', 'manage', 'tags', 'search', 'notes'];
     const shouldHideCenter = hiddenPages.includes(activePage);
 
+    const CarrotUp = () => (
+        <svg className="w-4 h-4" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" fill="currentColor" viewBox="0 0 24 24">
+            <path fillRule="evenodd" d="M5.575 13.729C4.501 15.033 5.43 17 7.12 17h9.762c1.69 0 2.618-1.967 1.544-3.271l-4.881-5.927a2 2 0 0 0-3.088 0l-4.88 5.927Z" clipRule="evenodd" />
+        </svg>
+    );
+
+    const CarrotDown = () => (
+        <svg className="w-4 h-4" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" fill="currentColor" viewBox="0 0 24 24">
+            <path fillRule="evenodd" d="M18.425 10.271C19.499 8.967 18.57 7 16.88 7H7.12c-1.69 0-2.618 1.967-1.544 3.271l4.881 5.927a2 2 0 0 0 3.088 0l4.88-5.927Z" clipRule="evenodd" />
+        </svg>
+    );
+
     const getLabel = (type, currentSort) => {
         if (type === 'trending') return isMobile ? 'T' : 'Trending';
 
         if (type === 'launch') {
             const isRecent = currentSort === 'launch_recent';
-            if (isMobile) return `L ${isRecent ? '↓' : '↑'}`;
+            if (isMobile) return <span className="flex items-center gap-1">L {isRecent ? <CarrotDown /> : <CarrotUp />}</span>;
             return isRecent ? "Newest" : "Oldest";
         }
 
         if (type === 'credits') {
             const isInc = currentSort === 'credits_inc';
-            if (isMobile) return `C ${isInc ? '↑' : '↓'}`;
-            return isInc ? "Credits ↑" : "Credits ↓";
+            if (isMobile) return <span className="flex items-center gap-1">C {isInc ? <CarrotUp /> : <CarrotDown />}</span>;
+            return <span className="flex items-center gap-1">Credits {isInc ? <CarrotUp /> : <CarrotDown />}</span>;
         }
 
         if (type === 'rating') {
             const isInc = currentSort === 'rating_inc';
-            if (isMobile) return `R ${isInc ? '↑' : '↓'}`;
-            return isInc ? "Rating ↑" : "Rating ↓";
+            if (isMobile) return <span className="flex items-center gap-1">R {isInc ? <CarrotUp /> : <CarrotDown />}</span>;
+            return <span className="flex items-center gap-1">Rating {isInc ? <CarrotUp /> : <CarrotDown />}</span>;
         }
     };
 

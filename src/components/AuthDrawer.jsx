@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Drawer } from 'vaul';
 import { supabase } from '../supabase';
-import { X, Mail, Lock, ArrowRight, Sparkles, Upload, Check, Moon, Sun, Monitor, AlertCircle } from 'lucide-react';
+import { X, Mail, Lock, ArrowRight, Sparkles, Upload, Check, Moon, Sun, Monitor, AlertCircle, Eye, EyeOff } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Cropper, CropperImage, CropperCropArea } from './ui/cropper';
 
@@ -27,7 +27,9 @@ const AuthDrawer = ({
         username: '',
         avatar: null, // preview URL
         occupation: 'freelancer',
-        preference: 'mixed'
+        preference: 'mixed',
+        manage_sidebar_mode: 'show',
+        tool_deck_preference: 'todo'
     });
 
     const fileInputRef = useRef(null);
@@ -37,6 +39,7 @@ const AuthDrawer = ({
     const [originalImage, setOriginalImage] = useState(null);
     const [crop, setCrop] = useState({ x: 0, y: 0, width: 0, height: 0 });
     const [avatarBlob, setAvatarBlob] = useState(null);
+    const [showNewPassword, setShowNewPassword] = useState(false);
 
     // Reset state when opening
     useEffect(() => {
@@ -93,7 +96,9 @@ const AuthDrawer = ({
                 username: user.user_metadata?.username || user.user_metadata?.full_name?.replace(/\s+/g, '').toLowerCase().slice(0, 15) || '',
                 occupation: user.user_metadata?.occupation || 'freelancer',
                 preference: user.user_metadata?.sort_preference || 'mixed',
-                avatar: user.user_metadata?.avatar_url || user.user_metadata?.picture || null
+                avatar: user.user_metadata?.avatar_url || user.user_metadata?.picture || null,
+                manage_sidebar_mode: user.user_metadata?.setting_preferences?.manage_sidebar_mode || 'show',
+                tool_deck_preference: user.user_metadata?.setting_preferences?.tool_deck_preference || 'todo'
             }));
         }
     }, [user, open]);
@@ -312,10 +317,15 @@ const AuthDrawer = ({
                 sort_preference: onboardingData.preference,
                 avatar_preference: preferenceType, // Save preference
                 updated_at: new Date(),
-                role: user?.user_metadata?.role || 'freebiee',
+                role: user?.user_metadata?.role || 'NewUser',
                 credits: user?.user_metadata?.credits !== undefined ? user.user_metadata.credits : 0,
                 // Ensure we save the avatar_url if we found one
-                ...(finalAvatarUrl ? { avatar_url: finalAvatarUrl } : {})
+                ...(finalAvatarUrl ? { avatar_url: finalAvatarUrl } : {}),
+                setting_preferences: {
+                    ...(user?.user_metadata?.setting_preferences || {}),
+                    manage_sidebar_mode: onboardingData.manage_sidebar_mode,
+                    tool_deck_preference: onboardingData.tool_deck_preference
+                }
             };
 
             // No need to explicitly add avatar_url here as it's added above if it exists
@@ -338,7 +348,8 @@ const AuthDrawer = ({
                     avatar_preference: preferenceType, // Sync to table
                     avatar_url: finalAvatarUrl || `https://ui-avatars.com/api/?name=${onboardingData.username}`,
                     role: updates.role,
-                    credits: updates.credits
+                    credits: updates.credits,
+                    setting_preferences: updates.setting_preferences
                 });
 
             if (profileError) console.error("Error creating user profile:", profileError);
@@ -697,7 +708,15 @@ const AuthDrawer = ({
                                                             await handleOnboardingSubmit();
                                                         } else {
                                                             const isValid = await validateUsername(onboardingData.username);
-                                                            if (isValid) setStep(2);
+                                                            if (isValid) {
+                                                                // Check if user is Google Auth - if so, offer password setup
+                                                                const isGoogle = user?.app_metadata?.provider === 'google' || user?.identities?.some(id => id.provider === 'google');
+                                                                if (isGoogle && mode !== 're_onboarding') {
+                                                                    setStep(1.5);
+                                                                } else {
+                                                                    setStep(2);
+                                                                }
+                                                            }
                                                         }
                                                     }}
                                                     disabled={(!onboardingData.username && mode !== 'avatar_only') || loading}
@@ -707,6 +726,86 @@ const AuthDrawer = ({
                                                 </button>
                                             </>
                                         )}
+                                    </motion.div>
+                                )}
+
+                                {/* STEP 1.5: SET PASSWORD (Google Users) */}
+                                {step === 1.5 && (
+                                    <motion.div
+                                        key="set-password"
+                                        initial="initial"
+                                        animate="animate"
+                                        exit="exit"
+                                        variants={stepVariants}
+                                        transition={{ duration: 0.2 }}
+                                        className="flex flex-col"
+                                    >
+                                        <h2 className="text-2xl font-bold text-foreground mb-2 text-center">Set a Password</h2>
+                                        <p className="text-muted-foreground text-sm mb-6 text-center">Create a password to sign in without Google later.</p>
+
+                                        <div className="flex flex-col gap-4 mb-6">
+                                            <div className="space-y-1">
+                                                <label className="text-sm font-medium text-foreground ml-1">New Password</label>
+                                                <div className="relative">
+                                                    <Lock size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                                                    <input
+                                                        type={showNewPassword ? "text" : "password"}
+                                                        placeholder="Min. 8 characters"
+                                                        className="w-full bg-background border border-border rounded-xl pl-10 pr-10 py-3 text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all font-mono text-sm"
+                                                        onChange={(e) => {
+                                                            const val = e.target.value;
+                                                            setOnboardingData({ ...onboardingData, newPassword: val });
+                                                            if (val.length > 0 && val.length < 8) setError('Password must be at least 8 characters');
+                                                            else setError(null);
+                                                        }}
+                                                    />
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setShowNewPassword(!showNewPassword)}
+                                                        className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                                                    >
+                                                        {showNewPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        {error && (
+                                            <div className="mb-4 p-3 bg-red-500/10 border border-red-500/20 rounded-xl flex items-center gap-2">
+                                                <AlertCircle size={16} className="text-red-400 shrink-0" />
+                                                <p className="text-red-400 text-xs font-medium">{error}</p>
+                                            </div>
+                                        )}
+
+                                        <button
+                                            onClick={async () => {
+                                                if (onboardingData.newPassword && onboardingData.newPassword.length >= 8) {
+                                                    setLoading(true);
+                                                    try {
+                                                        const { error } = await supabase.auth.updateUser({ password: onboardingData.newPassword });
+                                                        if (error) throw error;
+                                                        setStep(2);
+                                                    } catch (err) {
+                                                        setError(err.message);
+                                                    } finally {
+                                                        setLoading(false);
+                                                    }
+                                                } else {
+                                                    setError('Please enter a valid password (min 8 chars) or skip.');
+                                                }
+                                            }}
+                                            disabled={loading || (onboardingData.newPassword && onboardingData.newPassword.length < 8)}
+                                            className="w-full bg-foreground hover:opacity-90 text-background font-bold py-3.5 rounded-xl transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed shadow-md mb-3"
+                                        >
+                                            {loading ? 'Saving...' : 'Set Password & Continue'}
+                                        </button>
+
+                                        <button
+                                            onClick={() => setStep(2)}
+                                            className="w-full bg-transparent hover:bg-muted text-muted-foreground hover:text-foreground font-medium py-3 rounded-xl transition-all text-sm"
+                                        >
+                                            Skip for now
+                                        </button>
                                     </motion.div>
                                 )}
 
@@ -725,37 +824,51 @@ const AuthDrawer = ({
                                         <p className="text-muted-foreground text-sm mb-8 text-center">This helps us customize your feed.</p>
 
                                         <div className="flex flex-col gap-3 mb-8">
-                                            {['Student', 'Worker', 'Freelancer'].map((role) => (
-                                                <div
-                                                    key={role}
-                                                    onClick={() => setOnboardingData({ ...onboardingData, occupation: role.toLowerCase() })}
-                                                    className={`p-4 rounded-xl border cursor-pointer transition-all flex items-center justify-between group ${onboardingData.occupation === role.toLowerCase()
-                                                        ? 'bg-secondary border-primary/50 shadow-[0_0_15px_-3px_rgba(255,255,255,0.1)]'
-                                                        : 'bg-card border-border hover:border-ring/50'
-                                                        }`}
-                                                >
-                                                    <div className="flex items-center gap-4">
-                                                        <div className={`w-10 h-10 rounded-full flex items-center justify-center transition-colors ${onboardingData.occupation === role.toLowerCase() ? 'bg-foreground text-background' : 'bg-muted text-muted-foreground'}`}>
-                                                            {role === 'Student' && <span className="text-lg">🎓</span>}
-                                                            {role === 'Worker' && <span className="text-lg">💼</span>}
-                                                            {role === 'Freelancer' && <span className="text-lg">🚀</span>}
+                                            {['Student', 'Worker', 'Freelancer', 'Prefer not to say'].map((role) => {
+                                                const value = role === 'Prefer not to say' ? 'prefer_not_to_say' : role.toLowerCase();
+                                                return (
+                                                    <div
+                                                        key={role}
+                                                        onClick={() => setOnboardingData({ ...onboardingData, occupation: value })}
+                                                        className={`p-4 rounded-xl border cursor-pointer transition-all flex items-center justify-between group ${onboardingData.occupation === value
+                                                            ? 'bg-secondary border-primary/50 shadow-[0_0_15px_-3px_rgba(255,255,255,0.1)]'
+                                                            : 'bg-card border-border hover:border-ring/50'
+                                                            }`}
+                                                    >
+                                                        <div className="flex items-center gap-4">
+                                                            <div className={`w-10 h-10 rounded-full flex items-center justify-center transition-colors ${onboardingData.occupation === value ? 'bg-foreground text-background' : 'bg-muted text-muted-foreground'}`}>
+                                                                {role === 'Student' && <span className="text-lg">🎓</span>}
+                                                                {role === 'Worker' && <span className="text-lg">💼</span>}
+                                                                {role === 'Freelancer' && <span className="text-lg">🚀</span>}
+                                                                {role === 'Prefer not to say' && <span className="text-lg">🤐</span>}
+                                                            </div>
+                                                            <span className={`font-medium text-base transition-colors ${onboardingData.occupation === value ? 'text-foreground' : 'text-muted-foreground group-hover:text-foreground'}`}>{role}</span>
                                                         </div>
-                                                        <span className={`font-medium text-base transition-colors ${onboardingData.occupation === role.toLowerCase() ? 'text-foreground' : 'text-muted-foreground group-hover:text-foreground'}`}>{role}</span>
+                                                        {onboardingData.occupation === value && (
+                                                            <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} className="w-6 h-6 bg-foreground rounded-full flex items-center justify-center">
+                                                                <Check size={14} className="text-background" strokeWidth={3} />
+                                                            </motion.div>
+                                                        )}
                                                     </div>
-                                                    {onboardingData.occupation === role.toLowerCase() && (
-                                                        <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} className="w-6 h-6 bg-foreground rounded-full flex items-center justify-center">
-                                                            <Check size={14} className="text-background" strokeWidth={3} />
-                                                        </motion.div>
-                                                    )}
-                                                </div>
-                                            ))}
+                                                );
+                                            })}
                                         </div>
 
                                         <button
-                                            onClick={() => setStep(3)}
+                                            onClick={mode === 'single_edit' ? handleOnboardingSubmit : () => setStep(3)}
                                             className="w-full bg-foreground hover:opacity-90 text-background font-bold py-3.5 rounded-xl transition-all flex items-center justify-center gap-2 shadow-md"
                                         >
-                                            Continue <ArrowRight size={18} />
+                                            {mode === 'single_edit' ? (
+                                                <>
+                                                    Update
+                                                    <Check size={18} />
+                                                </>
+                                            ) : (
+                                                <>
+                                                    Continue
+                                                    <ArrowRight size={18} />
+                                                </>
+                                            )}
                                         </button>
                                     </motion.div>
                                 )}
@@ -812,12 +925,200 @@ const AuthDrawer = ({
                                         )}
 
                                         <button
-                                            onClick={handleOnboardingSubmit}
-                                            disabled={loading}
+                                            onClick={mode === 'single_edit' ? handleOnboardingSubmit : () => setStep(4)}
                                             className="w-full bg-foreground hover:opacity-90 text-background font-bold py-3.5 rounded-xl transition-all flex items-center justify-center gap-2 shadow-lg hover:shadow-xl hover:scale-[1.01] active:scale-[0.99]"
                                         >
-                                            {loading ? 'Setting up...' : 'Finish Setup'}
-                                            {!loading && <Check size={18} strokeWidth={2.5} />}
+                                            {mode === 'single_edit' ? (
+                                                <>
+                                                    Update
+                                                    <Check size={18} strokeWidth={2.5} />
+                                                </>
+                                            ) : (
+                                                <>
+                                                    Continue
+                                                    <ArrowRight size={18} strokeWidth={2.5} />
+                                                </>
+                                            )}
+                                        </button>
+                                    </motion.div>
+                                )}
+
+                                {/* STEP 4: SIDEBAR PREFERENCE */}
+                                {step === 4 && (
+                                    <motion.div
+                                        key="manage-sidebar"
+                                        initial="initial"
+                                        animate="animate"
+                                        exit="exit"
+                                        variants={stepVariants}
+                                        transition={{ duration: 0.2 }}
+                                        className="flex flex-col"
+                                    >
+                                        <h2 className="text-2xl font-bold text-foreground mb-2 text-center">Sidebar Preference</h2>
+                                        <p className="text-muted-foreground text-sm mb-8 text-center">Would you like a new sidebar for management?</p>
+
+                                        <div className="grid grid-cols-2 gap-4 mb-8">
+                                            {[
+                                                { id: 'show', label: 'Show', icon: <Check size={24} /> },
+                                                { id: 'hide', label: 'Hide', icon: <X size={24} /> }
+                                            ].map((opt) => (
+                                                <div
+                                                    key={opt.id}
+                                                    onClick={() => setOnboardingData({ ...onboardingData, manage_sidebar_mode: opt.id })}
+                                                    className={`p-6 rounded-xl border cursor-pointer transition-all flex flex-col items-center justify-center gap-3 group ${onboardingData.manage_sidebar_mode === opt.id
+                                                        ? 'bg-secondary border-primary/50 shadow-md'
+                                                        : 'bg-card border-border hover:border-ring/50'
+                                                        }`}
+                                                >
+                                                    <div className={`p-3 rounded-full ${onboardingData.manage_sidebar_mode === opt.id ? 'bg-foreground text-background' : 'bg-muted text-muted-foreground'}`}>
+                                                        {opt.icon}
+                                                    </div>
+                                                    <span className={`font-bold text-lg transition-colors ${onboardingData.manage_sidebar_mode === opt.id ? 'text-foreground' : 'text-muted-foreground'}`}>{opt.label}</span>
+                                                </div>
+                                            ))}
+                                        </div>
+
+                                        <button
+                                            onClick={() => setStep(5)}
+                                            className="w-full bg-foreground hover:opacity-90 text-background font-bold py-3.5 rounded-xl transition-all flex items-center justify-center gap-2 shadow-lg hover:shadow-xl hover:scale-[1.01] active:scale-[0.99]"
+                                        >
+                                            Continue <ArrowRight size={18} />
+                                        </button>
+                                    </motion.div>
+                                )}
+
+                                {/* STEP 5: TOOL DECK */}
+                                {step === 5 && (
+                                    <motion.div
+                                        key="tool-deck"
+                                        initial="initial"
+                                        animate="animate"
+                                        exit="exit"
+                                        variants={stepVariants}
+                                        transition={{ duration: 0.2 }}
+                                        className="flex flex-col"
+                                    >
+                                        <h2 className="text-2xl font-bold text-foreground mb-2 text-center">Tool Deck</h2>
+                                        <p className="text-muted-foreground text-sm mb-8 text-center">Choose your primary quick-access tool</p>
+
+                                        <div className="grid grid-cols-1 gap-3 mb-8">
+                                            {['Todo', 'Notes', 'Calendar'].map((tool) => (
+                                                <div
+                                                    key={tool}
+                                                    onClick={() => setOnboardingData({ ...onboardingData, tool_deck_preference: tool.toLowerCase() })}
+                                                    className={`relative overflow-hidden p-4 rounded-xl border cursor-pointer transition-all flex items-center justify-between group ${onboardingData.tool_deck_preference === tool.toLowerCase()
+                                                        ? 'bg-secondary border-primary/50 shadow-md'
+                                                        : 'bg-card border-border hover:border-ring/50'
+                                                        }`}
+                                                >
+                                                    <span className={`text-base font-bold ${onboardingData.tool_deck_preference === tool.toLowerCase() ? 'text-foreground' : 'text-muted-foreground'}`}>
+                                                        {tool}
+                                                    </span>
+                                                    {onboardingData.tool_deck_preference === tool.toLowerCase() && (
+                                                        <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} className="z-10 bg-foreground rounded-full p-1">
+                                                            <Check size={14} className="text-background" strokeWidth={3} />
+                                                        </motion.div>
+                                                    )}
+                                                </div>
+                                            ))}
+                                        </div>
+
+                                        <button
+                                            onClick={() => {
+                                                if (mode === 're_onboarding') {
+                                                    handleOnboardingSubmit();
+                                                    return;
+                                                }
+                                                const role = user?.user_metadata?.role || 'NewUser';
+                                                if (['freebiee', 'common', 'weallthy', 'administrator'].includes(role.toLowerCase())) {
+                                                    handleOnboardingSubmit();
+                                                } else {
+                                                    setStep(6);
+                                                }
+                                            }}
+                                            className="w-full bg-foreground hover:opacity-90 text-background font-bold py-3.5 rounded-xl transition-all flex items-center justify-center gap-2 shadow-lg hover:shadow-xl hover:scale-[1.01] active:scale-[0.99]"
+                                        >
+                                            {mode === 're_onboarding' ? (
+                                                <>
+                                                    Finish Setup <Check size={18} strokeWidth={2.5} />
+                                                </>
+                                            ) : (
+                                                <>
+                                                    Continue <ArrowRight size={18} />
+                                                </>
+                                            )}
+                                        </button>
+                                    </motion.div>
+                                )}
+
+                                {/* STEP 6: WELCOME */}
+                                {step === 6 && (
+                                    <motion.div
+                                        key="welcome"
+                                        initial="initial"
+                                        animate="animate"
+                                        exit="exit"
+                                        variants={stepVariants}
+                                        transition={{ duration: 0.2 }}
+                                        className="flex flex-col items-center text-center space-y-6"
+                                    >
+                                        <div className="relative mt-4">
+                                            <div className="w-28 h-28 rounded-full border-4 border-background shadow-xl overflow-hidden">
+                                                {onboardingData.avatar || avatarBlob ? (
+                                                    <img
+                                                        src={avatarBlob ? URL.createObjectURL(avatarBlob) : onboardingData.avatar}
+                                                        alt="Profile"
+                                                        className="w-full h-full object-cover"
+                                                    />
+                                                ) : (
+                                                    <div className="w-full h-full bg-secondary flex items-center justify-center text-2xl font-bold text-muted-foreground">
+                                                        {onboardingData.username[0]?.toUpperCase() || 'U'}
+                                                    </div>
+                                                )}
+                                            </div>
+                                            <div className="absolute -bottom-2 -right-2 bg-yellow-400 text-yellow-950 text-xs font-bold px-3 py-1.5 rounded-full shadow-lg border-2 border-background flex items-center gap-1.5">
+                                                <Sparkles size={12} fill="currentColor" />
+                                                NewUser
+                                            </div>
+                                        </div>
+
+                                        <div className="space-y-2">
+                                            <h2 className="text-3xl font-bold text-foreground">
+                                                Welcome, {onboardingData.username}!
+                                            </h2>
+                                            <p className="text-muted-foreground text-base font-medium">
+                                                Your workspace is ready.
+                                            </p>
+                                        </div>
+
+                                        <div className="bg-secondary/30 border border-border/50 rounded-2xl p-6 text-left space-y-3 w-full max-w-sm">
+                                            <div className="flex items-start gap-4">
+                                                <div className="p-2.5 bg-primary/10 rounded-xl text-primary shrink-0 mt-0.5">
+                                                    <Sparkles size={20} />
+                                                </div>
+                                                <div>
+                                                    <h4 className="font-bold text-base text-foreground">50 Free Credits & NewUser Role</h4>
+                                                    <p className="text-sm text-muted-foreground leading-relaxed mt-1.5">
+                                                        You are allotted 50 credits and a role of <span className="text-primary font-semibold">NewUser</span>.
+                                                        After 50 credits end, your role will be shifted to <span className="font-semibold text-foreground">Freebiee</span> automatically,
+                                                        and after that you will be getting 5 credits/month only unless role changed to Common or Wealthy.
+                                                    </p>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        {error && (
+                                            <div className="mb-4 p-3 bg-red-500/10 border border-red-500/20 rounded-xl w-full">
+                                                <p className="text-red-400 text-xs font-medium text-center">{error}</p>
+                                            </div>
+                                        )}
+
+                                        <button
+                                            onClick={handleOnboardingSubmit}
+                                            disabled={loading}
+                                            className="w-full bg-foreground hover:opacity-90 text-background font-bold py-3.5 rounded-xl transition-all flex items-center justify-center gap-2 shadow-lg hover:shadow-xl hover:scale-[1.01] active:scale-[0.99] mt-4"
+                                        >
+                                            {loading ? 'Setting up...' : 'Get Started'} <ArrowRight size={18} />
                                         </button>
                                     </motion.div>
                                 )}

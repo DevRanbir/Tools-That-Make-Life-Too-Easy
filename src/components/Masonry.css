@@ -52,12 +52,15 @@
 /* Title */
 .masonry-title {
     margin: 0;
-    font-size: 1.1rem; /* Slightly larger */
-    font-weight: 800; /* Bolder */
+    font-size: 1.1rem;
+    /* Slightly larger */
+    font-weight: 800;
+    /* Bolder */
     padding-right: 30px;
     text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
     transition: transform 0.3s ease;
-    letter-spacing: -0.02em; /* Tighter tracking for "smooth" look */
+    letter-spacing: -0.02em;
+    /* Tighter tracking for "smooth" look */
 }
 
 /* Author: Hidden by default, shown on hover */
@@ -114,4 +117,26 @@
 .item-wrapper:hover .card-expand-icon {
     opacity: 1;
     transform: scale(1) rotate(0deg);
+}
+
+@keyframes shimmer {
+    0% {
+        background-position: -200% center;
+    }
+
+    100% {
+        background-position: 200% center;
+    }
+}
+
+.animate-shimmer {
+    background: linear-gradient(90deg,
+            rgba(255, 255, 255, 0.4) 0%,
+            rgba(255, 255, 255, 1) 50%,
+            rgba(255, 255, 255, 0.4) 100%);
+    background-size: 200% auto;
+    color: transparent;
+    -webkit-background-clip: text;
+    background-clip: text;
+    animation: shimmer 2s linear infinite;
 }

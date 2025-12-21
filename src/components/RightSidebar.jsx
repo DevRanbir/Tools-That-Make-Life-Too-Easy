@@ -71,9 +71,9 @@ const RightSidebar = ({ user, isSettingsOpen, mode = 'full', setActivePage, todo
                 .from('user_details')
                 .select('bookmarks')
                 .eq('id', user.id)
-                .single();
+                .maybeSingle();
 
-            if (userError && userError.code !== 'PGRST116') throw userError;
+            if (userError) throw userError;
 
             if (userData && userData.bookmarks && userData.bookmarks.length > 0) {
                 // Limit to top 3 bookmarks
@@ -186,6 +186,13 @@ const RightSidebar = ({ user, isSettingsOpen, mode = 'full', setActivePage, todo
         effectivePinnedPages.unshift('manage');
     }
 
+    // Ensure fastmode is always at the top if it exists
+    if (effectivePinnedPages.includes('fastmode')) {
+        const index = effectivePinnedPages.indexOf('fastmode');
+        effectivePinnedPages.splice(index, 1);
+        effectivePinnedPages.unshift('fastmode');
+    }
+
     const isVisible = user && mode !== 'hidden' && (
         (mode === 'full' && (bookmarks.length > 0 || ongoingEvents.length > 0 || upcomingEvents.length > 0 || effectivePinnedPages.length > 0)) ||
         (mode === 'saved' && (bookmarks.length > 0 || isAdministrator)) ||
@@ -260,11 +267,12 @@ const RightSidebar = ({ user, isSettingsOpen, mode = 'full', setActivePage, todo
                             }
 
                             const IconComp = icon;
+                            const isFastMode = pageId === 'fastmode';
 
                             return (
                                 <div
                                     key={pageId}
-                                    className={`group w-full h-[48px] flex items-center justify-end pr-[10px] ${isExpanded ? 'pl-[20px]' : ''} text-muted-foreground cursor-pointer relative transition-all duration-200 hover:text-foreground hover:opacity-100 opacity-60`}
+                                    className={`group w-full h-[48px] flex items-center justify-end pr-[10px] ${isExpanded ? 'pl-[20px]' : ''} cursor-pointer relative transition-all duration-200 hover:text-foreground hover:opacity-100 ${isFastMode ? 'opacity-100 text-foreground' : 'opacity-60 text-muted-foreground'}`}
                                     onClick={() => {
                                         if (pageId === 'search') {
                                             if (typeof onOpenSearch === 'function') {
@@ -328,10 +336,7 @@ const RightSidebar = ({ user, isSettingsOpen, mode = 'full', setActivePage, todo
 
                                         <div
                                             className="min-w-[40px] w-[40px] h-[40px] flex items-center justify-center rounded-xl overflow-hidden bg-background border border-border group-hover:scale-105 transition-transform duration-200 shadow-sm hover:bg-secondary/50"
-                                            onClick={(e) => {
-                                                e.stopPropagation();
-                                                if (completeNextSubtask) completeNextSubtask(todo.id);
-                                            }}
+                                        // onClick removed to allow bubble up to parent for navigation
                                         >
                                             <span className="text-[10px] font-bold text-muted-foreground select-none">
                                                 {completedCount}/{totalCount}
@@ -357,21 +362,25 @@ const RightSidebar = ({ user, isSettingsOpen, mode = 'full', setActivePage, todo
                         {ongoingEvents.map((event, index) => (
                             <EventItem
                                 key={`ongoing-${index}`}
+                                id={event.id}
                                 title={event.title}
                                 time={event.time}
                                 date={event.date}
                                 isExpanded={isExpanded}
                                 type={event.type}
+                                setActivePage={setActivePage}
                             />
                         ))}
                         {upcomingEvents.map((event, index) => (
                             <EventItem
                                 key={`upcoming-${index}`}
+                                id={event.id}
                                 title={event.title}
                                 time={event.time}
                                 date={event.date}
                                 isExpanded={isExpanded}
                                 type={event.type}
+                                setActivePage={setActivePage}
                             />
                         ))}
                     </div>
@@ -404,7 +413,12 @@ const RightSidebar = ({ user, isSettingsOpen, mode = 'full', setActivePage, todo
                             <div
                                 key={product.id}
                                 className={`group w-full h-[48px] flex items-center justify-end pr-[10px] ${isExpanded ? 'pl-[20px]' : ''} text-muted-foreground cursor-pointer relative transition-all duration-200 hover:text-foreground hover:opacity-100 opacity-60`}
-                                onClick={() => { }}
+                                onClick={() => {
+                                    setActivePage('home', 'Bookmarked');
+                                    setTimeout(() => {
+                                        window.location.hash = `#product-${product.id}`;
+                                    }, 500);
+                                }}
                             >
                                 <span
                                     className={`text-sm font-medium whitespace-nowrap overflow-hidden mr-3 transition-all duration-300 ease-in-out ${isExpanded ? 'opacity-100 max-w-[200px] pointer-events-auto' : 'opacity-0 max-w-0 pointer-events-none'}`}
@@ -430,7 +444,7 @@ const RightSidebar = ({ user, isSettingsOpen, mode = 'full', setActivePage, todo
     );
 };
 
-const EventItem = ({ title, time, date, isExpanded, type }) => {
+const EventItem = ({ id, title, time, date, isExpanded, type, setActivePage }) => {
     const primaryLabel = type === 'ongoing' ? time : date;
 
     // Logic for what to show inside the circle icon
@@ -451,6 +465,12 @@ const EventItem = ({ title, time, date, isExpanded, type }) => {
     return (
         <div
             className={`group w-full h-[48px] flex items-center justify-end pr-[10px] ${isExpanded ? 'pl-[20px]' : ''} text-muted-foreground cursor-pointer relative transition-all duration-200 hover:text-foreground hover:opacity-100 opacity-60`}
+            onClick={() => {
+                setActivePage('calendar');
+                setTimeout(() => {
+                    window.location.hash = `#event-${id}`;
+                }, 500);
+            }}
         >
             <div
                 className={`flex flex-col items-end justify-end mr-3 transition-all duration-300 ease-in-out ${isExpanded ? 'opacity-100 max-w-[200px] pointer-events-auto' : 'opacity-0 max-w-0 pointer-events-none'}`}

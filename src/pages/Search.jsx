@@ -149,7 +149,7 @@ const SearchPage = ({ navigateOnly, user, sortPreference }) => {
                 .from('user_details')
                 .select('bookmarks')
                 .eq('id', user.id)
-                .single();
+                .maybeSingle();
 
             if (userData && userData.bookmarks) {
                 const bSet = new Set(userData.bookmarks);
@@ -257,36 +257,36 @@ const SearchPage = ({ navigateOnly, user, sortPreference }) => {
                     <p className="hero-subtitle">
                         {totalTools.toLocaleString()} <span className="text-destructive font-bold">AI tools ready to be searched</span>
                     </p>
-\
+                    \
                 </div>
             </div>
 
             <div className="content-overlay content-area pt-24">
 
                 <div className="hero-search-wrapper">
-                        <div className="big-search-bar">
-                            <input
-                                type="text"
-                                placeholder="Search..."
-                                value={searchQuery}
-                                onChange={(e) => {
-                                    const newVal = e.target.value;
-                                    setSearchQuery(newVal);
-                                    // Update hash without flooding history
-                                    if (newVal) {
-                                        window.history.replaceState(null, null, `#${encodeURIComponent(newVal)}`);
-                                    } else {
-                                        window.history.replaceState(null, null, window.location.pathname);
-                                    }
-                                }}
-                            />
-                            <div className="search-actions">
-                                <span className="kbd">CTRL + K</span>
-                                <button className="search-btn"><Search size={18} /></button>
-                            </div>
+                    <div className="big-search-bar">
+                        <input
+                            type="text"
+                            placeholder="Search..."
+                            value={searchQuery}
+                            onChange={(e) => {
+                                const newVal = e.target.value;
+                                setSearchQuery(newVal);
+                                // Update hash without flooding history
+                                if (newVal) {
+                                    window.history.replaceState(null, null, `#${encodeURIComponent(newVal)}`);
+                                } else {
+                                    window.history.replaceState(null, null, window.location.pathname);
+                                }
+                            }}
+                        />
+                        <div className="search-actions">
+                            <span className="kbd">CTRL + K</span>
+                            <button className="search-btn"><Search size={18} /></button>
                         </div>
-                        <div className="hero-footer-text">#Start typing to search.</div>
                     </div>
+                    <div className="hero-footer-text">#Start typing to search.</div>
+                </div>
 
                 <div
                     ref={gridRef}
