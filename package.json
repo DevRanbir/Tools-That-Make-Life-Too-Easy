@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
+    "build": "cross-env NODE_OPTIONS=--max-old-space-size=4096 vite build",
     "lint": "eslint .",
     "preview": "vite preview",
     "notifier": "node scripts/event-notifier.js"
@@ -61,6 +61,7 @@
     "@vitejs/plugin-react": "^5.1.1",
     "autoprefixer": "^10.4.22",
     "concurrently": "^9.2.1",
+    "cross-env": "^10.1.0",
     "eslint": "^9.39.1",
     "eslint-plugin-react-hooks": "^7.0.1",
     "eslint-plugin-react-refresh": "^0.4.24",
