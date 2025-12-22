@@ -740,13 +740,27 @@ If the user asks for something outside your scope, politely decline and remind t
 
             const fullPrompt = `${systemContext}\n\nUser Request: ${currentInput}`;
 
-            const response = await fetch('/api/process-stream', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    prompt: fullPrompt,
-                    user: user?.user_metadata?.username || user?.email || null,
-                    agent: fastModeItem.title // specific agent if needed
+            // Try local proxy first, fallback to Vercel URL
+            let response;
+            const requestBody = {
+                prompt: fullPrompt,
+                user: user?.user_metadata?.username || user?.email || null,
+                agent: fastModeItem.title // specific agent if needed
+            };
+            
+            try {
+                response = await fetch('/api/process-stream', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(requestBody)
+                });
+                
+                if (!response.ok) throw new Error('Local proxy failed');
+            } catch (proxyError) {
+                response = await fetch('https://bianca-wheat.vercel.app/api/process-stream', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(requestBody)
                 })
             });
 
