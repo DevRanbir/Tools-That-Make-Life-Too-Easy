@@ -658,7 +658,7 @@ const SmoothDrawer = ({ trigger, children, user, onAuthClick, darkMode, setDarkM
                                                                             const maxCap = monthlyLimit + 10;
                                                                             return (
                                                                                 <span className="text-muted-foreground text-xs">
-                                                                                    Monthly {monthlyLimit} credits
+                                                                                    Monthly {monthlyLimit} recharge
                                                                                 </span>
                                                                             );
                                                                         })()}
