@@ -2,6 +2,11 @@ import React, { useState, useEffect } from 'react';
 import { Bookmark, Settings, Home, Search, ShoppingBag, ListTodo, Calendar as CalendarIcon, Tag, Zap, Database, Monitor } from 'lucide-react';
 import { supabase } from '../supabase';
 
+const truncateTitle = (title, maxLength = 20) => {
+    if (!title) return '';
+    return title.length > maxLength ? title.substring(0, maxLength) + '...' : title;
+};
+
 const RightSidebar = ({ user, isSettingsOpen, mode = 'full', setActivePage, todos = [], completeNextSubtask, pinnedPages = [], onOpenSearch }) => {
     const [isExpanded, setIsExpanded] = useState(false);
     const [bookmarks, setBookmarks] = useState([]);
@@ -288,7 +293,7 @@ const RightSidebar = ({ user, isSettingsOpen, mode = 'full', setActivePage, todo
                                     <span
                                         className={`text-sm font-medium whitespace-nowrap overflow-hidden mr-3 transition-all duration-300 ease-in-out ${isExpanded ? 'opacity-100 max-w-[200px] pointer-events-auto' : 'opacity-0 max-w-0 pointer-events-none'}`}
                                     >
-                                        {label}
+                                        {truncateTitle(label)}
                                     </span>
 
                                     <div className="min-w-[40px] w-[40px] h-[40px] flex items-center justify-center rounded-xl overflow-hidden bg-background border border-border group-hover:scale-105 transition-transform duration-200 shadow-sm">
@@ -327,7 +332,7 @@ const RightSidebar = ({ user, isSettingsOpen, mode = 'full', setActivePage, todo
                                     >
                                         <div className={`flex flex-col items-end justify-end mr-3 transition-all duration-300 ease-in-out ${isExpanded ? 'opacity-100 max-w-[200px] pointer-events-auto' : 'opacity-0 max-w-0 pointer-events-none'}`}>
                                             <span className="text-sm font-medium whitespace-nowrap overflow-hidden">
-                                                {todo.text}
+                                                {truncateTitle(todo.text)}
                                             </span>
                                             <span className="text-[9px] text-muted-foreground uppercase tracking-wider truncate max-w-[120px]">
                                                 {subtitle}
@@ -423,7 +428,7 @@ const RightSidebar = ({ user, isSettingsOpen, mode = 'full', setActivePage, todo
                                 <span
                                     className={`text-sm font-medium whitespace-nowrap overflow-hidden mr-3 transition-all duration-300 ease-in-out ${isExpanded ? 'opacity-100 max-w-[200px] pointer-events-auto' : 'opacity-0 max-w-0 pointer-events-none'}`}
                                 >
-                                    {product.title || product.name}
+                                    {truncateTitle(product.title || product.name)}
                                 </span>
 
                                 <div className="min-w-[40px] w-[40px] h-[40px] flex items-center justify-center rounded-xl overflow-hidden bg-background border border-border group-hover:scale-105 transition-transform duration-200 shadow-sm">
@@ -478,7 +483,7 @@ const EventItem = ({ id, title, time, date, isExpanded, type, setActivePage }) =
 
                 {/* Show Title when expanded */}
                 <span className="text-sm font-medium whitespace-nowrap overflow-hidden">
-                    {title}
+                    {truncateTitle(title)}
                 </span>
                 <span className="text-[9px] text-muted-foreground uppercase tracking-wider">
                     {type}
