@@ -622,7 +622,7 @@ const NotesPage = ({ navigateOnly, user }) => {
                                         ref={editorRef}
                                         contentEditable={activeFile.name !== 'welcome.txt'} // Read-only if welcome.txt
                                         onInput={handleInput}
-                                        className="w-full h-full p-8 md:p-12 outline-none prose prose-zinc dark:prose-invert prose-lg overflow-y-auto custom-scrollbar"
+                                        className="w-full h-full p-8 md:p-12 outline-none prose dark:prose-invert prose-lg overflow-y-auto custom-scrollbar text-foreground prose-headings:text-foreground prose-p:text-foreground prose-li:text-foreground prose-strong:text-foreground prose-code:text-foreground"
                                         style={{ whiteSpace: 'pre-wrap' }}
                                         suppressContentEditableWarning={true}
                                     />
