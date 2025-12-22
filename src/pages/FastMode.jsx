@@ -7,7 +7,8 @@ import mermaid from 'mermaid';
 import { TextShimmer } from '../components/motion-primitives/text-shimmer';
 import MagneticMorphingNav from '../components/MagneticMorphingNav';
 import { supabase } from '../supabase';
-import { logTransaction } from '../utils/logTransaction';
+import { logTransaction, updateCreditsWithLog } from '../utils/logTransaction';
+import { apiCache } from '../utils/apiCache';
 import {
     Loader2, X, Download, ZoomIn, ZoomOut, Code, Info,
     Hand, Trash2, Search as SearchIcon, BookOpen, FileText,
@@ -2661,18 +2662,10 @@ const FastMode = ({ navigateOnly, user, messages, setMessages, onAuthClick, onCh
             const { data: latestUser } = await supabase.from('user_details').select('credits').eq('id', user.id).maybeSingle();
             if (latestUser) {
                 const newCredits = Math.max(0, latestUser.credits + changeAmount);
-                await supabase.from('user_details').update({ credits: newCredits }).eq('id', user.id);
-
-                // Log transaction
-                if (changeAmount !== 0) {
-                    await logTransaction(
-                        user.id,
-                        Math.abs(changeAmount),
-                        changeAmount > 0 ? 'credit' : 'debit',
-                        changeAmount > 0 ? 'Credit adjustment' : 'Fast Mode Agent Usage',
-                        newCredits
-                    );
-                }
+                
+                // CRITICAL: Update credits AND logs in the same query to trigger the database trigger
+                const description = changeAmount > 0 ? 'Credit adjustment' : 'Fast Mode Agent Usage';
+                await updateCreditsWithLog(user.id, newCredits, changeAmount, description);
 
                 // Update local user object strictly for UI reflection if needed, 
                 // though usually the auth listener handles this.
@@ -2700,30 +2693,12 @@ const FastMode = ({ navigateOnly, user, messages, setMessages, onAuthClick, onCh
         setIsLoading("Analyzing your request and routing to appropriate agents...");
 
         try {
-            // Try local proxy first, fallback to Vercel URL
-            let response;
             const requestBody = {
                 prompt: userMsg.content,
                 user: user?.user_metadata?.username || user?.email || null
             };
             
-            try {
-                response = await fetch('/api/process-stream', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(requestBody),
-                    signal: controller.signal
-                });
-                
-                if (!response.ok) throw new Error('Local proxy failed');
-            } catch (proxyError) {
-                response = await fetch('https://bianca-wheat.vercel.app/api/process-stream', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(requestBody),
-                    signal: controller.signal
-                });
-            }
+            const response = await apiCache.fetchWithFallback(requestBody, controller.signal);
 
             const reader = response.body.getReader();
             const decoder = new TextDecoder();

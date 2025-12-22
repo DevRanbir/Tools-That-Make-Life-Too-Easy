@@ -4,7 +4,8 @@ import { createPortal } from 'react-dom';
 import { Bookmark, ArrowUpRight, Loader2, Send, Sparkles, X, User, ArrowUp, CheckCheck, Copy, Trash2, RotateCcw, Paperclip, Download, LogIn, FileText, Mail, Eye, AlertCircle, Check } from 'lucide-react';
 import { MasonryCard } from './MasonryCard';
 import { supabase } from '../supabase';
-import { logTransaction } from '../utils/logTransaction';
+import { logTransaction, updateCreditsWithLog } from '../utils/logTransaction';
+import { apiCache } from '../utils/apiCache';
 import SmoothDrawer from './SmoothDrawer';
 import { Drawer } from 'vaul';
 import ReactMarkdown from 'react-markdown';
@@ -709,26 +710,15 @@ const Masonry = ({
 
                 const newCredits = userData.credits - cost;
 
-                // Update credits
-                const { error: updateError } = await supabase
-                    .from('user_details')
-                    .update({ credits: newCredits })
-                    .eq('id', user.id);
+                // CRITICAL: Update credits AND logs in the same query to trigger the database trigger
+                const description = `Used agent: ${fastModeItem.title || 'Agent'}`;
+                const result = await updateCreditsWithLog(user.id, newCredits, -cost, description);
 
-                if (updateError) {
+                if (!result.success) {
                     setMessages(prev => [...prev, { role: 'system', content: "Error: Failed to deduct credits." }]);
                     setIsProcessing(false);
                     return;
                 }
-
-                // Log Transaction
-                await logTransaction(
-                    user.id,
-                    cost,
-                    'debit',
-                    `Used agent: ${fastModeItem.title || 'Agent'}`,
-                    newCredits
-                );
             }
 
 
@@ -740,29 +730,13 @@ If the user asks for something outside your scope, politely decline and remind t
 
             const fullPrompt = `${systemContext}\n\nUser Request: ${currentInput}`;
 
-            // Try local proxy first, fallback to Vercel URL
-            let response;
             const requestBody = {
                 prompt: fullPrompt,
                 user: user?.user_metadata?.username || user?.email || null,
-                agent: fastModeItem.title // specific agent if needed
+                agent: fastModeItem.title
             };
             
-            try {
-                response = await fetch('/api/process-stream', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(requestBody)
-                });
-                
-                if (!response.ok) throw new Error('Local proxy failed');
-            } catch (proxyError) {
-                response = await fetch('https://bianca-wheat.vercel.app/api/process-stream', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(requestBody)
-                });
-            }
+            const response = await apiCache.fetchWithFallback(requestBody);
 
             const reader = response.body.getReader();
             const decoder = new TextDecoder();

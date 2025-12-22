@@ -176,6 +176,27 @@ const Manual = ({ navigateOnly, pageName = 'Manual', user, sortPreference, targe
                     // but the view renders specific categories.
                     setProducts(processedProducts);
                 } else {
+                    // Normal Manual Page - Still populate categories for nav
+                    // Bookmarked
+                    setBookmarkedTools(processedProducts.filter(p => p.isBookmarked));
+
+                    // Liked
+                    setLikedTools(processedProducts.filter(p => p.isLiked));
+
+                    // Trending (Top 3 views)
+                    setTrendingTools([...processedProducts].sort((a, b) => (b.views || 0) - (a.views || 0)).slice(0, 3));
+
+                    // Recently Used
+                    const recentMap = new Map();
+                    userLogs.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+                    userLogs.forEach(log => {
+                        const product = processedProducts.find(p => p.title && (log.description.includes(p.title) || p.title.includes(log.description)));
+                        if (product && !recentMap.has(product.id)) {
+                            recentMap.set(product.id, product);
+                        }
+                    });
+                    setRecentTools(Array.from(recentMap.values()).slice(0, 4));
+
                     // Normal Manual Filtering
                     let sorted = [...processedProducts];
                     switch (sortPreference) {
@@ -438,7 +459,7 @@ const Manual = ({ navigateOnly, pageName = 'Manual', user, sortPreference, targe
                                     stagger={0.05}
                                     animateFrom="bottom"
                                     scaleOnHover={true}
-                                    hoverScale={0.95}
+                                    hoverScale={0.98}
                                     blurToFocus={true}
                                     colorShiftOnHover={false}
                                     onBookmark={handleBookmark}

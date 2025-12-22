@@ -24,7 +24,9 @@ export const logTransaction = async (userId, amount, type, description, currentT
             created_at: new Date().toISOString()
         };
 
-        const updatedLogs = [...currentLogs, newLog];
+        // IMPORTANT: Update the entire logs array to trigger the database trigger
+        // Force a complete replacement by creating a new array reference
+        const updatedLogs = JSON.parse(JSON.stringify([...currentLogs, newLog]));
 
         const { error: updateError } = await supabase
             .from('user_details')
@@ -47,5 +49,46 @@ export const logTransaction = async (userId, amount, type, description, currentT
         }
     } catch (error) {
         console.error('Error logging transaction:', error);
+    }
+};
+
+// New function to update credits AND logs in a single query (ensures trigger fires)
+export const updateCreditsWithLog = async (userId, newCredits, changeAmount, description) => {
+    if (!userId) return { success: false, error: 'No user ID provided' };
+    
+    try {
+        const logType = changeAmount > 0 ? 'credit' : 'debit';
+        const creditsSpent = Math.abs(changeAmount);
+
+        // Use Postgres function to update credits and logs in a SINGLE UPDATE statement
+        // This ensures the trigger fires correctly
+        const { error } = await supabase.rpc('update_credits_with_log', {
+            user_id: userId,
+            new_credits: newCredits,
+            credits_spent: creditsSpent,
+            log_type: logType,
+            log_description: description
+        });
+
+        if (error) {
+            console.error('Error updating credits and logs:', error);
+            return { success: false, error };
+        }
+
+        // Show toast notification
+        if (changeAmount > 0) {
+            toast.success(`Credited ${creditsSpent} Credits`, {
+                description: description
+            });
+        } else if (changeAmount < 0) {
+            toast.success(`Deducted ${creditsSpent} Credits`, {
+                description: description
+            });
+        }
+
+        return { success: true, newCredits };
+    } catch (error) {
+        console.error('Error in updateCreditsWithLog:', error);
+        return { success: false, error };
     }
 };

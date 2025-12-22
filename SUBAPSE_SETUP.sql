@@ -241,6 +241,47 @@ $$;
 grant execute on function increment_credits(int, uuid) to authenticated;
 grant execute on function increment_credits(int, uuid) to service_role;
 
+-- ==========================================
+-- Function to update credits and append to logs atomically
+-- This ensures the trigger fires correctly
+-- ==========================================
+CREATE OR REPLACE FUNCTION update_credits_with_log(
+    user_id uuid,
+    new_credits integer,
+    credits_spent integer,
+    log_type text,
+    log_description text
+)
+RETURNS void
+LANGUAGE plpgsql
+SECURITY definer
+AS $$
+DECLARE
+    new_log jsonb;
+BEGIN
+    -- Create the log entry
+    new_log := jsonb_build_object(
+        'credits_spent', credits_spent,
+        'current_total_credits', new_credits,
+        'type', log_type,
+        'description', log_description,
+        'created_at', now()
+    );
+
+    -- Update credits and append log in a SINGLE UPDATE statement
+    -- This is CRITICAL for the trigger to fire
+    UPDATE public.user_details
+    SET 
+        credits = new_credits,
+        logs = COALESCE(logs, '[]'::jsonb) || jsonb_build_array(new_log)
+    WHERE id = user_id;
+END;
+$$;
+
+-- Grant execution permissions
+GRANT EXECUTE ON FUNCTION update_credits_with_log(uuid, integer, integer, text, text) TO authenticated;
+GRANT EXECUTE ON FUNCTION update_credits_with_log(uuid, integer, integer, text, text) TO service_role;
+
 
 -- ==========================================
 -- 6. Monthly Credit Reset Logic

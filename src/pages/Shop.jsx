@@ -7,7 +7,7 @@ import { useRef, useState, useEffect } from 'react';
 import { gsap } from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
 import { supabase } from '../supabase';
-import { logTransaction } from '../utils/logTransaction';
+import { logTransaction, updateCreditsWithLog } from '../utils/logTransaction';
 import { toast } from 'sonner';
 
 gsap.registerPlugin(ScrollTrigger);
@@ -183,20 +183,9 @@ const ShopPage = ({ navigateOnly, user, sortPreference }) => {
                 if (currentCredits > maxAllowed) {
                     toast.error(`Credit limit exceeded! Adjusting your balance to the limit of ${maxAllowed}.`);
 
-                    // Update Supabase
-                    await supabase
-                        .from('user_details')
-                        .update({ credits: maxAllowed })
-                        .eq('id', user.id);
-
-                    // Log adjustment
-                    await logTransaction(
-                        user.id,
-                        currentCredits - maxAllowed,
-                        'debit',
-                        `Credit limit adjustment (Role: ${userRole})`,
-                        maxAllowed
-                    );
+                    // CRITICAL: Update credits AND logs in the same query to trigger the database trigger
+                    const description = `Credit limit adjustment (Role: ${userRole})`;
+                    await updateCreditsWithLog(user.id, maxAllowed, maxAllowed - currentCredits, description);
 
                     // Update local state to the limit
                     data.credits = maxAllowed;
@@ -344,21 +333,29 @@ const ShopPage = ({ navigateOnly, user, sortPreference }) => {
         const loadingToast = toast.loading(`Upgrading to ${plan.name}...`);
 
         try {
-            const { error } = await supabase
+            // First, update role
+            const { error: roleError } = await supabase
                 .from('user_details')
-                .update({ role: role, credits: credits })
+                .update({ role: role })
                 .eq('id', user.id);
 
-            if (error) throw error;
+            if (roleError) throw roleError;
 
-            // Log upgrade
-            await logTransaction(
-                user.id,
-                credits,
-                'credit',
-                `Credit reset to ${credits} (Role Upgrade: ${plan.name})`,
-                credits
-            );
+            // Then update credits and logs atomically using the database function
+            const { error: creditsError } = await supabase.rpc('update_credits_with_log', {
+                user_id: user.id,
+                new_credits: credits,
+                credits_spent: credits,
+                log_type: 'credit',
+                log_description: `Credit reset to ${credits} (Role Upgrade: ${plan.name})`
+            });
+
+            if (creditsError) throw creditsError;
+
+            // Show success toast
+            toast.success(`Credited ${credits} Credits`, {
+                description: `Credit reset to ${credits} (Role Upgrade: ${plan.name})`
+            });
 
             // Refresh user details
             const { data: newData } = await supabase.from('user_details').select('*').eq('id', user.id).maybeSingle();
