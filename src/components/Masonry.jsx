@@ -761,8 +761,8 @@ If the user asks for something outside your scope, politely decline and remind t
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(requestBody)
-                })
-            });
+                });
+            }
 
             const reader = response.body.getReader();
             const decoder = new TextDecoder();
