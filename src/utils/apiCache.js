@@ -2,7 +2,7 @@
 class APICache {
     constructor() {
         this.endpoints = [
-            '/api/process-stream', // Local proxy (older method)
+            //' /api/process-stream', // Local proxy (older method)
             'https://bianca-wheat.vercel.app/api/process-stream' // Direct backend (works on Appwrite & Vercel)
         ];
         this.currentEndpointIndex = 0;
