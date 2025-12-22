@@ -149,7 +149,7 @@ const AuthDrawer = ({
             const { error } = await supabase.auth.signInWithOAuth({
                 provider: 'google',
                 options: {
-                    redirectTo: 'https://tools-that-make-life-too-easy.appwrite.network/',
+                    redirectTo: window.location.origin,
                 },
             });
             if (error) throw error;

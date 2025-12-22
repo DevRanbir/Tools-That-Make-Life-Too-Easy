@@ -144,7 +144,7 @@ const SearchOverlay = ({ navigateOnly, onClose }) => {
                         )}
 
                         <div className="search-actions">
-                            <span className="kbd">ESC</span>
+                            <span className="kbd cursor-pointer" onClick={handleClose}>ESC to exit</span>
                             <button
                                 className="search-btn"
                                 onClick={() => handleSearch(searchQuery)}
@@ -153,7 +153,7 @@ const SearchOverlay = ({ navigateOnly, onClose }) => {
                             </button>
                         </div>
                     </div>
-                    <div className="hero-footer-text text-center mt-4">#1 website for AI tools. Used by 70M+ humans.</div>
+                    <div className="hero-footer-text text-center mt-4">Find the right agent for your needs. Type your query, we handle the rest.</div>
                 </div>
             </div>
         </div>

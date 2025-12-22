@@ -190,7 +190,11 @@ const Manual = ({ navigateOnly, pageName = 'Manual', user, sortPreference, targe
                     const recentMap = new Map();
                     userLogs.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
                     userLogs.forEach(log => {
-                        const product = processedProducts.find(p => p.title && (log.description.includes(p.title) || p.title.includes(log.description)));
+                        const product = processedProducts.find(p => 
+                            p.title && 
+                            log.description && 
+                            (log.description.includes(p.title) || p.title.includes(log.description))
+                        );
                         if (product && !recentMap.has(product.id)) {
                             recentMap.set(product.id, product);
                         }
@@ -362,7 +366,7 @@ const Manual = ({ navigateOnly, pageName = 'Manual', user, sortPreference, targe
                             )
                         ) : (
                             <>
-                                {totalTools.toLocaleString()} <span className="text-destructive font-bold">AI tools</span> and {tasksDone.toLocaleString()} <span className="text-destructive">tasks done</span>
+                                {totalTools.toLocaleString()} <span className="text-destructive font-bold">AI tools</span> and {tasksDone.toLocaleString()} <span className="text-destructive font-bold">Tasks Done</span>
                             </>
                         )}
                     </p>

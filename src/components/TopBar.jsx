@@ -175,7 +175,7 @@ const TopBar = ({ darkMode, setDarkMode, onAuthClick, user, navigateOnly, sortPr
                     >
                         <Search size={16} />
                         <span>Search</span>
-                        <span className="kbd">CTRL + K</span>
+                        <span className="kbd text-destructive">CTRL + K</span>
                     </div>
                 </div>
             </div>

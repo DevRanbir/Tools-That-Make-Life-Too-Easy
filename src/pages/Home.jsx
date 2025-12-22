@@ -125,7 +125,7 @@ const Home = ({ navigateOnly, sortPreference }) => {
                                 </button>
                             </div>
                         </div>
-                        <div className="hero-footer-text">#1 website for AI tools. Used by 70M+ humans.</div>
+                        <div className="hero-footer-text">#1 website for AI Agents.</div>
                     </div>
                 </div>
             </div>

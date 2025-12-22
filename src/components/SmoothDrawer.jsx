@@ -312,10 +312,10 @@ const SmoothDrawer = ({ trigger, children, user, onAuthClick, darkMode, setDarkM
                             {/* Main Content Area */}
                             <div className="flex-1 p-8 overflow-y-auto">
                                 {/* Close Button Mobile / Tablet hidden usually, but good to have */}
-                                <div className="absolute top-4 right-4 z-50">
+                                <div className="absolute top-2 right-4 z-50 bg-background/95 rounded-lg transition-colors">
                                     <button
                                         onClick={() => onOpenChange(false)}
-                                        className="p-2 rounded-lg hover:bg-secondary transition-colors text-muted-foreground hover:text-foreground"
+                                        className="p-2 rounded-lg transition-colors text-muted-foreground hover:text-foreground"
                                     >
                                         <X size={20} />
                                     </button>
@@ -497,7 +497,7 @@ const SmoothDrawer = ({ trigger, children, user, onAuthClick, darkMode, setDarkM
                                                                                                 setActivePage?.('home');
                                                                                                 onOpenChange(false);
                                                                                             }}
-                                                                                            className="text-xs bg-primary/10 text-primary px-3 py-1.5 rounded-md font-medium hover:bg-primary/20 transition-colors"
+                                                                                            className="text-xs text-destructive rounded-md font-medium hover:bg-primary/20 transition-colors"
                                                                                         >
                                                                                             View in For You
                                                                                         </button>
@@ -538,12 +538,11 @@ const SmoothDrawer = ({ trigger, children, user, onAuthClick, darkMode, setDarkM
                                                         ) : files.length > 0 ? (
                                                             files.map((file) => (
                                                                 <div key={file.id} className="flex items-center gap-4 p-3 hover:bg-secondary/30 transition-colors cursor-pointer border-b border-border last:border-0">
-                                                                    <div className="w-10 h-10 rounded-lg bg-secondary flex items-center justify-center overflow-hidden border border-border flex-shrink-0">
+                                                                    <div className="w-10 h-10 rounded-lg bg-secondary flex items-center justify-center overflow-hidden flex-shrink-0">
                                                                         <FileText size={20} className="text-foreground" />
                                                                     </div>
                                                                     <div className="flex-1 min-w-0">
                                                                         <p className="text-sm font-medium truncate">{file.name}</p>
-                                                                        <p className="text-xs text-muted-foreground">{(file.metadata?.size / 1024).toFixed(1)} KB</p>
                                                                     </div>
                                                                     <div className="text-xs text-muted-foreground whitespace-nowrap">
                                                                         {new Date(file.created_at).toLocaleDateString()}
@@ -652,17 +651,14 @@ const SmoothDrawer = ({ trigger, children, user, onAuthClick, darkMode, setDarkM
                                                                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-1 items-center">
                                                                     <span className="font-medium text-muted-foreground uppercase text-xs">CREDITS</span>
                                                                     <div className="col-span-2 flex items-center gap-2">
-                                                                        <span className="font-mono text-foreground font-bold">
-                                                                            {userDetails.credits !== undefined ? userDetails.credits : 0}
-                                                                        </span>
                                                                         {(() => {
                                                                             const role = userDetails.role || 'freebiee';
-                                                                            const limits = { freebiee: 0, common: 20, wealthy: 50, administrator: 100 };
+                                                                            const limits = { freebiee: 0, common: 20, wealthy: 50, administrator: 100, NewUser: 0 };
                                                                             const monthlyLimit = limits[role] || 0;
                                                                             const maxCap = monthlyLimit + 10;
                                                                             return (
                                                                                 <span className="text-muted-foreground text-xs">
-                                                                                    / {maxCap} (Monthly: {monthlyLimit})
+                                                                                    Monthly: {monthlyLimit} refill
                                                                                 </span>
                                                                             );
                                                                         })()}
@@ -674,9 +670,9 @@ const SmoothDrawer = ({ trigger, children, user, onAuthClick, darkMode, setDarkM
                                                                                     window.location.hash = 'tab=buy_credits';
                                                                                 }, 100);
                                                                             }}
-                                                                            className="ml-auto text-[10px] bg-primary/10 text-primary px-2 py-1 rounded-md hover:bg-primary/20 transition-colors whitespace-nowrap font-medium"
+                                                                            className="ml-auto text-[10px] bg-primary/10 text-destructive px-2 py-1 rounded-md hover:bg-primary/20 transition-colors whitespace-nowrap font-medium"
                                                                         >
-                                                                            Get more
+                                                                            Get More
                                                                         </button>
                                                                     </div>
                                                                 </div>
@@ -859,20 +855,14 @@ const SmoothDrawer = ({ trigger, children, user, onAuthClick, darkMode, setDarkM
                                 )}
 
                                 {activeTab === 'billing' && (
-                                    <div className="h-full flex flex-col items-center justify-center text-center space-y-4 animate-in fade-in slide-in-from-right-4 duration-300">
-                                        <div className="w-16 h-16 rounded-full bg-card flex items-center justify-center border border-border">
+                                    <div className="h-full flex flex-col items-center justify-center text-center animate-in fade-in slide-in-from-right-4 duration-300">
+                                        <div className="h-16 p-4 flex items-center justify-center ">
                                             <div>
                                                 <h3 className="text-lg font-semibold">Coming Soon</h3>
-                                                <p className="text-sm text-muted-foreground max-w-xs mx-auto mt-2">
-                                                    Billing and subscription management will be available in a future update.
+                                                <p className="text-sm text-muted-foreground mx-auto mt-2">
+                                                    Billing and subscription management <br />will be available in a future update.
                                                 </p>
                                             </div>
-                                            <button
-                                                onClick={() => onTabChange && onTabChange('preferences')}
-                                                className="text-primary text-sm font-medium hover:underline"
-                                            >
-                                                Go back to Preferences
-                                            </button>
                                         </div>
                                     </div>
                                 )}

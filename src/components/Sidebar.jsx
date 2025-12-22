@@ -44,7 +44,10 @@ const Sidebar = ({
     updateSettingPreference
 }) => {
     const [isExpanded, setIsExpanded] = useState(false);
-    const [isMobileHidden, setIsMobileHidden] = useState(false);
+    const [isMobileHidden, setIsMobileHidden] = useState(() => {
+        // Hide sidebar by default on mobile (< 768px)
+        return typeof window !== 'undefined' && window.innerWidth < 768;
+    });
     const switchId = useId();
 
     // Swipe to show sidebar on mobile
